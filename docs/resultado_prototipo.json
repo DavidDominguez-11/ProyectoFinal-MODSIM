@@ -1,0 +1,371 @@
+{
+  "classification": "demostracion_sintetica_no_historica",
+  "units": {
+    "time": "minutos",
+    "population": "personas ponderadas"
+  },
+  "assumptions": {
+    "grid_cells": [
+      6,
+      3
+    ],
+    "initial_fire_cell": [
+      0,
+      0
+    ],
+    "fire_rule": "cada 2 min, una celda al este y una al sur",
+    "road_nodes": "(x,2), x=1..5; salida absorbente x=6",
+    "edge_travel_min": 2,
+    "edge_capacity": "un grupo simultáneo por arista",
+    "horizon_min": 20,
+    "exposure": "posición o extremo de tramo ardiendo al inicio de un minuto"
+  },
+  "scenarios": {
+    "base": {
+      "alert_min": 4,
+      "people_initial": 6,
+      "people_at_exit": 6,
+      "people_exposed_cumulative": 5,
+      "total_queue_group_minutes": 1,
+      "maximum_edge_occupancy": 1,
+      "fire_arrival_at_road_min": {
+        "0": 4,
+        "1": 6,
+        "2": 8,
+        "3": 10,
+        "4": 12,
+        "5": 14
+      },
+      "groups": [
+        {
+          "name": "A",
+          "people": 2,
+          "origin": 1,
+          "preparation_min": 1,
+          "finish_min": 15,
+          "first_exposure_min": 6,
+          "queue_min": 0
+        },
+        {
+          "name": "B",
+          "people": 3,
+          "origin": 1,
+          "preparation_min": 2,
+          "finish_min": 17,
+          "first_exposure_min": 6,
+          "queue_min": 1
+        },
+        {
+          "name": "C",
+          "people": 1,
+          "origin": 2,
+          "preparation_min": 1,
+          "finish_min": 13,
+          "first_exposure_min": null,
+          "queue_min": 0
+        }
+      ],
+      "history": [
+        {
+          "minute": 0,
+          "burning_cells": 1,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 1,
+          "burning_cells": 1,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 2,
+          "burning_cells": 3,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 3,
+          "burning_cells": 3,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 4,
+          "burning_cells": 6,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 5,
+          "burning_cells": 6,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 6,
+          "burning_cells": 9,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 7,
+          "burning_cells": 9,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 8,
+          "burning_cells": 12,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 9,
+          "burning_cells": 12,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 10,
+          "burning_cells": 15,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 11,
+          "burning_cells": 15,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 12,
+          "burning_cells": 17,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 13,
+          "burning_cells": 17,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 1
+        },
+        {
+          "minute": 14,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 1
+        },
+        {
+          "minute": 15,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 3
+        },
+        {
+          "minute": 16,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 3
+        },
+        {
+          "minute": 17,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 18,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 19,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 20,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 5,
+          "people_at_exit": 6
+        }
+      ]
+    },
+    "alerta_anticipada": {
+      "alert_min": 0,
+      "people_initial": 6,
+      "people_at_exit": 6,
+      "people_exposed_cumulative": 0,
+      "total_queue_group_minutes": 1,
+      "maximum_edge_occupancy": 1,
+      "fire_arrival_at_road_min": {
+        "0": 4,
+        "1": 6,
+        "2": 8,
+        "3": 10,
+        "4": 12,
+        "5": 14
+      },
+      "groups": [
+        {
+          "name": "A",
+          "people": 2,
+          "origin": 1,
+          "preparation_min": 1,
+          "finish_min": 11,
+          "first_exposure_min": null,
+          "queue_min": 0
+        },
+        {
+          "name": "B",
+          "people": 3,
+          "origin": 1,
+          "preparation_min": 2,
+          "finish_min": 13,
+          "first_exposure_min": null,
+          "queue_min": 1
+        },
+        {
+          "name": "C",
+          "people": 1,
+          "origin": 2,
+          "preparation_min": 1,
+          "finish_min": 9,
+          "first_exposure_min": null,
+          "queue_min": 0
+        }
+      ],
+      "history": [
+        {
+          "minute": 0,
+          "burning_cells": 1,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 1,
+          "burning_cells": 1,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 2,
+          "burning_cells": 3,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 3,
+          "burning_cells": 3,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 4,
+          "burning_cells": 6,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 5,
+          "burning_cells": 6,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 6,
+          "burning_cells": 9,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 7,
+          "burning_cells": 9,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 8,
+          "burning_cells": 12,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 0
+        },
+        {
+          "minute": 9,
+          "burning_cells": 12,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 1
+        },
+        {
+          "minute": 10,
+          "burning_cells": 15,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 1
+        },
+        {
+          "minute": 11,
+          "burning_cells": 15,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 3
+        },
+        {
+          "minute": 12,
+          "burning_cells": 17,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 3
+        },
+        {
+          "minute": 13,
+          "burning_cells": 17,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 14,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 15,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 16,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 17,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 18,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 19,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 6
+        },
+        {
+          "minute": 20,
+          "burning_cells": 18,
+          "people_exposed_cumulative": 0,
+          "people_at_exit": 6
+        }
+      ]
+    }
+  }
+}
