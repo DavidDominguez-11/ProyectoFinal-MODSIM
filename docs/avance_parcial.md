@@ -1,7 +1,7 @@
 # Avance parcial — simulación de incendios y evacuación
 
 **Proyecto:** Modelación y Simulación, Universidad del Valle de Guatemala  
-**Estado:** propuesta técnica, auditoría inicial de geodatos y observaciones del fuego, y cronología preliminar de avisos contrastada con NIST; todavía no hay simulador ni resultados experimentales.
+**Estado:** propuesta técnica, auditoría inicial de datos, cronología preliminar contrastada con NIST y prototipo sintético ejecutable; aún no hay simulación calibrada ni resultados históricos del caso.
 **Fecha de preparación:** 24 de octubre de 2026  
 **Equipo:** cinco integrantes; distribución de responsabilidades pendiente de acuerdo interno.  
 **Tema:** aprobado según la confirmación del equipo y la evidencia incluida en `docs/aprobacion.pdf`.
@@ -74,6 +74,10 @@ Construir y evaluar un modelo híbrido que acople propagación simplificada del 
 
 No se usará un mapa de cobertura de **2021** como si describiera automáticamente el combustible anterior al incendio de **2018**. Tampoco se interpretarán puntos satelitales de fuego activo como un perímetro continuo o una medida directa de superficie quemada [10].
 
+### Corte funcional de integración
+
+Se implementó un [prototipo ejecutable](prototipo_avance.md) de grilla celular, tránsito por tramos con capacidad y grupos de evacuación. La ejecución compara dos horas de alerta en un mapa **completamente sintético** y guarda [resultados reproducibles](resultado_prototipo.json). En ese ejemplo supuesto, los seis habitantes ponderados llegan a la salida en ambos escenarios; la exposición potencial acumulada es de cinco personas en la base y cero con la alerta adelantada. Estas cifras verifican el acoplamiento de módulos y **no describen el Camp Fire ni son evidencia de eficacia real de una política**. Se ejecutaron pruebas automáticas de conservación de población, capacidad, llegada del fuego a la vía y repetibilidad.
+
 ## 5. Variables, estados y reglas por especificar
 
 ### Incendio
@@ -136,11 +140,11 @@ La siguiente distribución propone responsables por **entregable verificable**; 
 
 ## 9. Estado real del avance y próximos hitos
 
-**Completado al redactar este documento:** tema propuesto y aprobado según el equipo; lectura de requisitos del curso; comparación preliminar de incendios candidatos; selección razonada del Camp Fire como candidato; identificación de fuentes oficiales; delimitación conceptual del modelo y de sus límites de validación; auditoría reproducible de carreteras, límite municipal, población aproximada, combustible, elevación y observaciones del fuego; y una cronología inicial de avisos con referencias a los registros originales de NIST.
+**Completado al redactar este documento:** tema propuesto y aprobado según el equipo; lectura de requisitos del curso; comparación preliminar de incendios candidatos; selección razonada del Camp Fire como candidato; identificación de fuentes oficiales; delimitación conceptual del modelo y de sus límites de validación; auditoría reproducible de carreteras, límite municipal, población aproximada, combustible, elevación y observaciones del fuego; cronología inicial de avisos con referencias a NIST; y prototipo sintético ejecutable con pruebas y resultados de demostración.
 
 **Pendiente antes de afirmar viabilidad local:** ampliar combustible y elevación al corredor completo; resolver la anomalía de fecha y duplicaciones del libro NIST; obtener viento apropiado; comprobar que las carreteras forman un grafo utilizable; revisar qué destinos y capacidades tienen soporte documental; seleccionar el dominio y el período definitivos.
 
-**Pendiente de desarrollo:** ecuaciones y parámetros; código ejecutable; pruebas; experimentos; resultados; informe PDF; repositorio público reproducible; video; diapositivas y exposición. Ninguno de esos elementos se presenta aquí como terminado.
+**Pendiente de desarrollo del modelo del caso:** ecuaciones y parámetros sustentados, integración de geodatos reales, módulos de brigadas y cierres, calibración, validación, sensibilidad y experimentos con réplicas; informe PDF final, repositorio público reproducible, video, diapositivas y exposición. El código, pruebas y cifras del prototipo son solo un primer corte sintético y no cumplen por sí solos esos pendientes.
 
 **Siguiente hito inmediato:** extraer del NETTRA cierres, congestión y refugios con la misma disciplina de evidencia; contrastar puntos del libro de fuego con el informe NIST; y ampliar los recortes de combustible y elevación hacia el origen del incendio y las rutas de salida. Con esa evidencia se fijará el alcance espacial y temporal. Luego se podrá cerrar la especificación matemática e iniciar los módulos.
 
@@ -162,4 +166,4 @@ La siguiente distribución propone responsables por **entregable verificable**; 
 
 ## 11. Registro inicial de uso de IA
 
-Para cumplir la política del proyecto, el equipo debe conservar los prompts relevantes y evaluarlos críticamente. En esta etapa se utilizó IA para leer las guías del curso, relacionar la propuesta con los paradigmas vistos, buscar candidatos de incendio y estructurar esta auditoría. La propuesta inicial de usar Guatemala se descartó como ubicación preferida después de la observación del profesor comunicada por el equipo. La selección del Camp Fire se apoya en fuentes institucionales citadas, pero aún requiere verificar archivos descargados. No se han generado datos experimentales ni se ha validado un simulador. En el informe final habrá que conservar ejemplos concretos de prompts, respuestas acertadas o fallidas, verificaciones independientes y decisiones del equipo.
+Para cumplir la política del proyecto, el equipo debe conservar los prompts relevantes y evaluarlos críticamente. En esta etapa se utilizó IA para leer las guías del curso, relacionar la propuesta con los paradigmas vistos, buscar candidatos de incendio, estructurar la auditoría y programar el prototipo sintético. La propuesta inicial de usar Guatemala se descartó como ubicación preferida después de la observación del profesor comunicada por el equipo. La selección del Camp Fire se apoya en fuentes institucionales citadas, pero aún requiere completar la preparación de datos. Se generaron resultados de demostración con cifras inventadas y se verificaron invariantes del programa; **no se ha validado un simulador del incendio histórico**. En el informe final habrá que conservar ejemplos concretos de prompts, respuestas acertadas o fallidas, verificaciones independientes y decisiones del equipo.
