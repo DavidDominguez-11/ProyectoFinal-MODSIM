@@ -1,10 +1,12 @@
 # Avance parcial — simulación de incendios y evacuación
 
 **Proyecto:** Modelación y Simulación, Universidad del Valle de Guatemala  
-**Estado:** propuesta técnica y auditoría inicial de fuentes; todavía no hay simulador ni resultados experimentales.  
+**Estado:** propuesta técnica, auditoría inicial de geodatos y observaciones del fuego, y cronología preliminar de avisos contrastada con NIST; todavía no hay simulador ni resultados experimentales.
 **Fecha de preparación:** 24 de octubre de 2026  
 **Equipo:** cinco integrantes; distribución de responsabilidades pendiente de acuerdo interno.  
 **Tema:** aprobado según la confirmación del equipo y la evidencia incluida en `docs/aprobacion.pdf`.
+
+**Contenido de la entrega parcial según la guía:** descripción del proyecto propuesto y captura de la aprobación del catedrático. Este documento aporta la descripción y [aprobacion.pdf](aprobacion.pdf) contiene la evidencia de aprobación indicada por el equipo. Los anexos de auditoría y cronología detallan el progreso técnico, pero no sustituyen esos dos elementos exigidos.
 
 ## 1. Problema y pregunta de investigación
 
@@ -55,17 +57,17 @@ Construir y evaluar un modelo híbrido que acople propagación simplificada del 
 
 ## 4. Auditoría inicial de datos
 
-**Estado de esta auditoría:** se confirmaron páginas y productos en fuentes primarias. Aún no se han descargado, inspeccionado ni armonizado archivos para el sector candidato. Por tanto, la tabla no equivale a una certificación de cobertura o calidad local.
+**Estado de esta auditoría:** ya se descargaron temporalmente e inspeccionaron las carreteras TIGER/Line 2018 de Butte County, el polígono TIGER/Line 2018 de Paradise, recortes de población WorldPop 2018, combustible LANDFIRE 2016 y elevación USGS, además del libro de observaciones geolocalizadas del fuego de NIST. Los resultados, anomalías y límites están en [auditoria_datos.md](auditoria_datos.md). Se inició una [cronología de avisos documentados](cronologia_base.md) a partir de la tabla 10 del informe NETTRA de NIST. Ninguna capa se ha armonizado todavía con las otras para una simulación.
 
 | Necesidad | Fuente encontrada | Uso previsto | Estado y límite |
 |---|---|---|---|
-| Cronología del fuego | NIST, estudio de progresión y mapas por intervalos [1] | Referencia histórica para llegada y dirección de avance | Fuente identificada. Mapas e informes requieren extracción o digitalización controlada; no asumir que hay una grilla horaria lista para usar. |
-| Avisos, evacuación, tráfico y áreas temporales | NIST, estudio NETTRA [2] | Definir y contrastar eventos observables | Fuente identificada. No proporciona trayectorias completas de cada evacuado. |
+| Cronología del fuego | NIST, estudio, mapas y libro de observaciones [1, 13] | Referencia histórica para llegada y dirección de avance | Libro Excel descargado: 15 hojas, 2 839 apariciones y 2 236 claves distintas de observación. La columna de fecha dice 2021 en todas las filas, aunque el incendio fue en 2018. Se revisará antes de usarlo; no es una grilla horaria lista para usar. |
+| Avisos, evacuación, tráfico y áreas temporales | NIST, estudio NETTRA [2] | Definir y contrastar eventos observables | Ya se extrajeron hitos de avisos de la tabla 10, con hora y fuente interna. Faltan tablas de cierres, tráfico y refugios; no hay trayectorias completas de cada evacuado. |
 | Albergues y respuesta institucional | Informe posterior del condado de Butte [3] | Identificar tipos de destinos y algunos tiempos de habilitación | Fuente identificada. Capacidad individual y ocupación por hora siguen sin verificarse. |
-| Combustible y vegetación previos al incendio | LANDFIRE 2016 Remap [4] | Susceptibilidad relativa de celdas | Producto identificado; pendiente descargar recorte, revisar categorías y comprobar representatividad en 2018. |
-| Elevación | USGS 3DEP [5] | Pendiente local | Producto identificado; pendiente comprobar fecha, cobertura y resolución útil. |
-| Carreteras próximas al evento | TIGER/Line 2018, condado de Butte [6] | Geometría inicial del grafo | Archivo de carreteras identificado; pendiente revisar conectividad, sentidos, accesos y aptitud para calcular tiempos. La geometría por sí sola no da capacidad ni velocidad histórica. |
-| Población previa al evento | ACS de cinco años 2013–2017 [7] | Totales agregados para generar agentes ponderados | API identificada; pendiente elegir geografía y variables, descargar estimaciones y márgenes de error. No son domicilios individuales. |
+| Combustible y vegetación previos al incendio | LANDFIRE 2016 FBFM40 [4] | Susceptibilidad relativa de celdas | Recorte de Paradise descargado y leído; 21 códigos de categoría. Falta ampliar al corredor, interpretar el diccionario y traducir categorías a reglas justificadas. |
+| Elevación | USGS 3DEP [5] | Pendiente local | Recorte de Paradise descargado y leído. Falta revisar fecha de fuentes, resolución de origen y cobertura del corredor completo. |
+| Carreteras próximas al evento | TIGER/Line 2018, condado de Butte [6] | Geometría inicial del grafo | Archivo descargado e inspeccionado: 9 530 segmentos en el condado; 1 087 tocan el polígono de Paradise. Pendiente revisar conectividad, sentidos, accesos y tiempos. La geometría no da capacidad ni velocidad histórica. |
+| Población previa al evento | WorldPop 2018 [11], total municipal institucional [12] y ACS 2013–2017 [7] | Distribución espacial aproximada y control agregado para agentes ponderados | Recorte WorldPop inspeccionado; el total municipal de referencia es 26 581 al 1 de enero de 2018. La API ACS solicitó clave. Ninguna fuente identifica domicilios individuales o evacuados reales. |
 | Viento histórico | Reanálisis ERA5 [8], o mediciones locales si se comprueba acceso | Dirección e intensidad por período | Fuente general identificada; su escala espacial puede ser demasiado gruesa para vientos locales. Comparar con observaciones del caso antes de usarla. |
 | Perímetro final | CAL FIRE FRAP [9] | Comprobación espacial global, si se extiende el horizonte | Producto identificado. Un perímetro final no aporta la hora de llegada de cada celda. |
 | Capacidad de albergues, brigadas, tiempos individuales de salida y capacidad vial | Registros históricos por localizar | Parámetros de la simulación | **No verificados.** Si no hay registros utilizables, serán supuestos explícitos y se analizará su sensibilidad. |
@@ -134,13 +136,13 @@ La siguiente distribución propone responsables por **entregable verificable**; 
 
 ## 9. Estado real del avance y próximos hitos
 
-**Completado al redactar este documento:** tema propuesto y aprobado según el equipo; lectura de requisitos del curso; comparación preliminar de incendios candidatos; selección razonada del Camp Fire como candidato; identificación de fuentes oficiales; delimitación conceptual del modelo y de sus límites de validación.
+**Completado al redactar este documento:** tema propuesto y aprobado según el equipo; lectura de requisitos del curso; comparación preliminar de incendios candidatos; selección razonada del Camp Fire como candidato; identificación de fuentes oficiales; delimitación conceptual del modelo y de sus límites de validación; auditoría reproducible de carreteras, límite municipal, población aproximada, combustible, elevación y observaciones del fuego; y una cronología inicial de avisos con referencias a los registros originales de NIST.
 
-**Pendiente antes de afirmar viabilidad local:** descargar muestras o recortes de las capas; confirmar cobertura temporal y espacial; comprobar que las carreteras forman un grafo utilizable; revisar qué lugares de destino y qué capacidades tienen soporte documental; seleccionar el dominio y el período definitivos.
+**Pendiente antes de afirmar viabilidad local:** ampliar combustible y elevación al corredor completo; resolver la anomalía de fecha y duplicaciones del libro NIST; obtener viento apropiado; comprobar que las carreteras forman un grafo utilizable; revisar qué destinos y capacidades tienen soporte documental; seleccionar el dominio y el período definitivos.
 
 **Pendiente de desarrollo:** ecuaciones y parámetros; código ejecutable; pruebas; experimentos; resultados; informe PDF; repositorio público reproducible; video; diapositivas y exposición. Ninguno de esos elementos se presenta aquí como terminado.
 
-**Siguiente hito inmediato:** una ficha de datos por fuente con URL exacta de descarga, versión, licencia, formato, cobertura, tamaño, fecha de referencia y observaciones de calidad. Con esa evidencia se congelará el alcance espacial y temporal. Luego se podrá fijar la especificación matemática e iniciar los módulos.
+**Siguiente hito inmediato:** extraer del NETTRA cierres, congestión y refugios con la misma disciplina de evidencia; contrastar puntos del libro de fuego con el informe NIST; y ampliar los recortes de combustible y elevación hacia el origen del incendio y las rutas de salida. Con esa evidencia se fijará el alcance espacial y temporal. Luego se podrá cerrar la especificación matemática e iniciar los módulos.
 
 ## 10. Referencias de la auditoría
 
@@ -154,6 +156,9 @@ La siguiente distribución propone responsables por **entregable verificable**; 
 8. Copernicus Climate Change Service, *ERA5 Reanalysis*: https://climate.copernicus.eu/climate-reanalysis
 9. CAL FIRE, *Historical Fire Perimeters*: https://www.fire.ca.gov/what-we-do/fire-resource-assessment-program/fire-perimeters
 10. NASA Earthdata, explicación de límites de detecciones activas frente a perímetros: https://forum.earthdata.nasa.gov/viewtopic.php?t=5200
+11. WorldPop, servicio de población a 100 m: https://worldpop.arcgis.com/arcgis/rest/services/WorldPop_Total_Population_100m/ImageServer
+12. Butte County Association of Governments, tabla de población histórica basada en el Departamento de Finanzas de California: https://www.bcag.org/population-estimates-historical
+13. NIST, datos descargables que respaldan el estudio del Camp Fire: https://catalog.data.gov/dataset/data-supporting-the-case-study-of-the-2018-camp-fire
 
 ## 11. Registro inicial de uso de IA
 
