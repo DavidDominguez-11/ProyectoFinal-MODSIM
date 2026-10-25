@@ -2,7 +2,7 @@
 
 **Fecha:** 24 de octubre de 2026.  
 **Propósito:** distinguir fuentes localizadas, archivos efectivamente inspeccionados y datos que siguen faltando para el avance parcial.  
-**Estado:** auditoría inicial; todavía no se han preparado capas finales ni corrido simulaciones.
+**Estado:** auditoría inicial; todavía no se han preparado capas finales ni corrido simulaciones con datos del caso. Existe un prototipo sintético separado, descrito en [prototipo_avance.md](prototipo_avance.md).
 
 ## 1. Hallazgos comprobados con archivos
 
