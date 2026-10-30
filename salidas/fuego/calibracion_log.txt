@@ -1,0 +1,26 @@
+etapa 1: 20/120, mejor objetivo 95.9 (pérdida 58.8, MAE 97.7 min, 43071 ha, fuera de perímetro 31%)
+etapa 1: 40/120, mejor objetivo 95.9 (pérdida 58.8, MAE 97.7 min, 43071 ha, fuera de perímetro 31%)
+etapa 1: 60/120, mejor objetivo 95.9 (pérdida 58.8, MAE 97.7 min, 43071 ha, fuera de perímetro 31%)
+etapa 1: 80/120, mejor objetivo 88.1 (pérdida 71.6, MAE 98.2 min, 35408 ha, fuera de perímetro 14%)
+etapa 1: 100/120, mejor objetivo 88.1 (pérdida 71.6, MAE 98.2 min, 35408 ha, fuera de perímetro 14%)
+etapa 1: 120/120, mejor objetivo 88.1 (pérdida 71.6, MAE 98.2 min, 35408 ha, fuera de perímetro 14%)
+etapa 2: 20/60, mejor objetivo 88.1 (pérdida 71.6, MAE 98.2 min, 35408 ha, fuera de perímetro 14%)
+etapa 2: 40/60, mejor objetivo 73.9 (pérdida 60.4, MAE 86.8 min, 28624 ha, fuera de perímetro 11%)
+etapa 2: 60/60, mejor objetivo 73.9 (pérdida 60.4, MAE 86.8 min, 28624 ha, fuera de perímetro 11%)
+{
+  "p_h": 0.17804615182237865,
+  "factor_viento": 2.631546208253809,
+  "p_foco": 0.008377618306721334,
+  "distancia_foco_m": 223.14107417963743,
+  "p_veg_urbano": -0.9,
+  "duracion_min": 5.0,
+  "perdida_min": 67.425,
+  "mae_min": 95.025,
+  "sesgo_min": -15.375000000000004,
+  "frac_dentro_tolerancia": 0.5637500000000001,
+  "frac_alcanzada": 0.9487499999999999,
+  "frac_llega_antes_de_obs": 0.4875,
+  "area_quemada_ha": 29559.9,
+  "frac_fuera_perimetro_quemada": 0.13532745006967023,
+  "objetivo": 83.66429400836043
+}

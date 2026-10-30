@@ -1,0 +1,68 @@
+{
+  "parametros": {
+    "p_h": 0.17804615182237865,
+    "c1": 0.045,
+    "c2": 0.131,
+    "a_pendiente": 0.078,
+    "p_veg": [
+      -0.9,
+      0.4,
+      0.3,
+      0.4,
+      0.2,
+      -0.2,
+      0.0
+    ],
+    "factor_viento": 2.631546208253809,
+    "duracion_min": 5.0,
+    "p_foco": 0.008377618306721334,
+    "distancia_foco_m": 223.14107417963743,
+    "sigma_foco": 0.8,
+    "p_ignicion_foco": 0.4,
+    "dispersion_foco_grados": 15.0,
+    "paso_min": 1.0
+  },
+  "calibracion": {
+    "objetivo": "Pérdida asimétrica de llegada en bloques de calibración NIST + penalización por quemar fuera del perímetro final, 10 réplicas",
+    "peso_comision_min": 120.0,
+    "metricas_calibracion": {
+      "perdida_min": 67.425,
+      "mae_min": 95.025,
+      "sesgo_min": -15.375000000000004,
+      "frac_dentro_tolerancia": 0.5637500000000001,
+      "frac_alcanzada": 0.9487499999999999,
+      "frac_llega_antes_de_obs": 0.4875,
+      "area_quemada_ha": 29559.9,
+      "frac_fuera_perimetro_quemada": 0.13532745006967023,
+      "objetivo": 83.66429400836043
+    },
+    "rangos": {
+      "p_h": [
+        0.005,
+        0.5
+      ],
+      "factor_viento": [
+        0.5,
+        4.0
+      ],
+      "p_foco": [
+        0.0005,
+        0.05
+      ],
+      "distancia_foco_m": [
+        100.0,
+        3000.0
+      ],
+      "p_veg_urbano": [
+        -0.9,
+        0.5
+      ],
+      "duracion_min": [
+        5.0,
+        60.0
+      ]
+    },
+    "evaluaciones": 185,
+    "semilla": 20181108
+  }
+}
