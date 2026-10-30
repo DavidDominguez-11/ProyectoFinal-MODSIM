@@ -1,0 +1,26 @@
+{
+  "descripcion": "Salida del módulo de fuego para el módulo de evacuación.",
+  "crs": "EPSG:32610",
+  "transform_gdal": [
+    609500.0,
+    100.0,
+    0.0,
+    4413500.0,
+    0.0,
+    -100.0
+  ],
+  "forma_filas_columnas": [
+    205,
+    278
+  ],
+  "resolucion_m": 100.0,
+  "minuto_cero": "2018-11-08T06:25 hora local (ignición)",
+  "horizonte_min": 480,
+  "archivos": {
+    "llegada_replicas.npz": "llegada_min[replica, fila, col]: minuto entero de ignición; -1 = no arde en el horizonte. 'semillas' lista la semilla de cada réplica.",
+    "llegada_mediana_min.tif": "Mediana entre réplicas del minuto de llegada; -1 = no arde en más de la mitad de las réplicas.",
+    "probabilidad_quema.tif": "Fracción de réplicas en que la celda arde dentro del horizonte."
+  },
+  "uso": "Una celda está en peligro en el minuto t de la réplica r si 0 <= llegada_min[r, f, c] <= t. Fila 0 es el norte; coordenada x = xmin + (col + 0.5) * res, y = ymax - (fila + 0.5) * res.",
+  "parametros": "config/parametros_fuego.json"
+}
