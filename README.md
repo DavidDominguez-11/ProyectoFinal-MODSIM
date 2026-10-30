@@ -9,6 +9,7 @@ Proyecto final de Modelación y Simulación: simulación híbrida de propagació
 - [Cronología inicial de avisos con fuentes NIST](docs/cronologia_base.md)
 - [Prototipo ejecutable y resultados sintéticos](docs/prototipo_avance.md)
 - [Módulo de fuego: datos, modelo, calibración y validación](docs/modelo_fuego.md)
+- [Pendientes del equipo: qué le toca a cada quien](docs/pendientes_equipo.md)
 - [Instrucciones del proyecto](docs/proyecto_final_modelacionysimulacion.md)
 - [Indicaciones de Canvas](docs/proyecto.md)
 - [Evidencia de aprobación](docs/aprobacion.pdf)
