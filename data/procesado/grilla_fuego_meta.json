@@ -1,0 +1,62 @@
+{
+  "crs": "EPSG:32610",
+  "transform_gdal": [
+    609500.0,
+    100.0,
+    0.0,
+    4413500.0,
+    0.0,
+    -100.0
+  ],
+  "forma_filas_columnas": [
+    205,
+    278
+  ],
+  "resolucion_m": 100.0,
+  "celdas_por_clase": {
+    "no_combustible": 969,
+    "urbano": 1821,
+    "pasto_GR": 6560,
+    "pasto_arbustivo_GS": 4937,
+    "arbustal_SH": 4917,
+    "sotobosque_TU": 20924,
+    "hojarasca_TL": 16862,
+    "restos_corta_SB": 0
+  },
+  "celdas_dentro_perimetro_final": 46225,
+  "codigos_fbfm40_presentes": [
+    91,
+    93,
+    98,
+    99,
+    101,
+    102,
+    103,
+    121,
+    122,
+    141,
+    142,
+    144,
+    145,
+    147,
+    161,
+    162,
+    163,
+    165,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,
+    188,
+    189
+  ],
+  "poblacion": {
+    "suma_worldpop_paradise": 18319.7,
+    "control_paradise_bcag_2018": 26581,
+    "factor_reescalado": 1.451,
+    "suma_dominio_ajustada": 42388.9,
+    "nota": "Estimación residencial; no es población presente a la hora del incendio."
+  }
+}

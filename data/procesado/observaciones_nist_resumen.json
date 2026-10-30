@@ -1,0 +1,28 @@
+{
+  "fuente": "https://data.nist.gov/od/ds/mds2-2954/NIST%20TN%202135%20Appendix%20F%20Fire%20Spread%20Data.xlsx",
+  "sha256": "14fac49ca633d4c944fcb2ba2b22e95ea8751b8d0dd58216a836d2b6e89268a3",
+  "apariciones_de_filas": 2839,
+  "observaciones_unicas": 2236,
+  "descartes": {
+    "sin_hora_o_coordenada": 2,
+    "ventana_mayor_60": 288,
+    "residual": 177,
+    "tipo_O_u_otro": 411,
+    "fuera_de_dominio": 0,
+    "fuera_de_horizonte": 510
+  },
+  "observaciones_usadas": 848,
+  "por_tipo": {
+    "C": 79,
+    "R": 239,
+    "S": 286,
+    "V": 244
+  },
+  "celdas_con_llegada_observada": 527,
+  "celdas_calibracion": 241,
+  "celdas_validacion": 286,
+  "rango_minutos": [
+    0,
+    480
+  ]
+}
