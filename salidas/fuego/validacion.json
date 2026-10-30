@@ -1,0 +1,139 @@
+{
+  "replicas": 30,
+  "semillas": [
+    1000,
+    1029
+  ],
+  "bloques_500m_validacion": 118,
+  "bloques_500m_calibracion": 80,
+  "validacion": {
+    "perdida_min": {
+      "media": 64.319,
+      "ic95": [
+        62.731,
+        65.907
+      ]
+    },
+    "mae_min": {
+      "media": 105.101,
+      "ic95": [
+        102.602,
+        107.601
+      ]
+    },
+    "sesgo_min": {
+      "media": -58.028,
+      "ic95": [
+        -64.183,
+        -51.874
+      ]
+    },
+    "frac_dentro_tolerancia": {
+      "media": 0.417,
+      "ic95": [
+        0.403,
+        0.431
+      ]
+    },
+    "frac_alcanzada": {
+      "media": 0.981,
+      "ic95": [
+        0.975,
+        0.986
+      ]
+    },
+    "frac_llega_antes_de_obs": {
+      "media": 0.646,
+      "ic95": [
+        0.624,
+        0.667
+      ]
+    },
+    "area_quemada_ha": {
+      "media": 28880.567,
+      "ic95": [
+        27657.491,
+        30103.642
+      ]
+    },
+    "frac_fuera_perimetro_quemada": {
+      "media": 0.119,
+      "ic95": [
+        0.102,
+        0.136
+      ]
+    }
+  },
+  "calibracion": {
+    "perdida_min": {
+      "media": 70.436,
+      "ic95": [
+        67.358,
+        73.513
+      ]
+    },
+    "mae_min": {
+      "media": 96.387,
+      "ic95": [
+        93.854,
+        98.92
+      ]
+    },
+    "sesgo_min": {
+      "media": -7.418,
+      "ic95": [
+        -13.619,
+        -1.216
+      ]
+    },
+    "frac_dentro_tolerancia": {
+      "media": 0.493,
+      "ic95": [
+        0.468,
+        0.518
+      ]
+    },
+    "frac_alcanzada": {
+      "media": 0.949,
+      "ic95": [
+        0.935,
+        0.963
+      ]
+    },
+    "frac_llega_antes_de_obs": {
+      "media": 0.448,
+      "ic95": [
+        0.423,
+        0.474
+      ]
+    },
+    "area_quemada_ha": {
+      "media": 28880.567,
+      "ic95": [
+        27657.491,
+        30103.642
+      ]
+    },
+    "frac_fuera_perimetro_quemada": {
+      "media": 0.119,
+      "ic95": [
+        0.102,
+        0.136
+      ]
+    }
+  },
+  "referencias": {
+    "modelo_radial": {
+      "velocidad_m_min": 113.0,
+      "perdida_min": 55.65918798666186,
+      "mae_min": 108.21479418406615,
+      "area_quemada_ha": 56990.0,
+      "frac_fuera_perimetro_quemada": 1.0
+    },
+    "piso_de_ruido_validacion": {
+      "bloques_evaluados": 81,
+      "perdida_min": 42.4537037037037,
+      "mae_min": 59.666666666666664
+    }
+  }
+}
