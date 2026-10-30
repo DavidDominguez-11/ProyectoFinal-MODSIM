@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Datos descargados (se regeneran con scripts/fuego/f1 y f3)
+data/crudo/

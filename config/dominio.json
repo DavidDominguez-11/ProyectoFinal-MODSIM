@@ -1,0 +1,21 @@
+{
+  "nombre": "Camp Fire, corredor Pulga-Concow-Paradise",
+  "crs": "EPSG:32610",
+  "comentario_crs": "UTM zona 10N, metros. Todas las capas se exportan directamente a esta grilla.",
+  "limites_utm": {
+    "xmin": 609500,
+    "xmax": 637300,
+    "ymin": 4393000,
+    "ymax": 4413500
+  },
+  "resolucion_m": 100,
+  "ignicion": {
+    "lat": 39.81461,
+    "lon": -121.434004,
+    "hora_local": "2018-11-08T06:25",
+    "zona_horaria": "America/Los_Angeles",
+    "fuente": "NIST TN 2135, Appendix F, registro 911-001-1 (primera llamada, torre de transmisión cerca de Pulga)"
+  },
+  "horizonte_min": 480,
+  "comentario_periodo": "De 06:25 a 14:25 hora local del 8 de noviembre de 2018: avance inicial sobre Concow, Paradise y Magalia."
+}
