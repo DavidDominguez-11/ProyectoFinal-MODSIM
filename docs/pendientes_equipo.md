@@ -8,7 +8,7 @@ El trabajo está dividido en tres partes. Cada persona termina la suya completa,
 | Parte | Responsable | Estado |
 |---|---|---|
 | 1. Datos reales y modelo del fuego | Persona 1 | ✅ Terminada |
-| 2. Evacuación, red vial y experimentos | Persona 2 | ⏳ Red y motor implementados; 53 pruebas y una réplica real pasan; lote de 120 corridas en ejecución |
+| 2. Evacuación, red vial y experimentos | Persona 2 | ⏳ Red y motor implementados; 63 pruebas y verificación independiente pasan; nuevo lote de 120 corridas en marcha con cuatro procesos |
 | 3. Evidencia del caso y entregables | Persona 3 | ⏳ Pendiente |
 
 ---
@@ -25,7 +25,7 @@ Ya existe el modelo del fuego del Camp Fire. Cubre de las 06:25 a las 14:25 del 
 
 ## Parte 2: evacuación, red vial y experimentos
 
-**Avance de implementación:** red TIGER dirigida, grupos ponderados, motor por eventos y escenarios pareados implementados. La documentación y los comandos están en [modelo_evacuacion.md](modelo_evacuacion.md). Se aprobaron 53 pruebas automáticas y una réplica real completa; faltan terminar y revisar las 120 corridas y sus resultados. Los parámetros de respuesta son supuestos explícitos mientras llega la evidencia de la Parte 3; no hay validación histórica de evacuación.
+**Avance de implementación:** red TIGER dirigida, grupos ponderados, motor por eventos y escenarios pareados implementados. La documentación y los comandos están en [modelo_evacuacion.md](modelo_evacuacion.md). Se aprobaron 63 pruebas automáticas, la verificación independiente de concurrencia/entorno y dos réplicas base reales en paralelo; faltan terminar y revisar el nuevo lote de 120 corridas con cuatro procesos y sus resultados. Los parámetros de respuesta son supuestos explícitos mientras llega la evidencia de la Parte 3; no hay validación histórica de evacuación.
 
 **Objetivo:** simular cómo evacúan las personas por las carreteras mientras avanza el fuego, y comparar escenarios.
 
