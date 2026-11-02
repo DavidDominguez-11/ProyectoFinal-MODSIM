@@ -1,15 +1,15 @@
 # Evacuación reproducible y comparación de escenarios
 
-`scripts/evacuacion/experimentos.py` integra la población residencial, las réplicas de fuego y la red vial dirigida con el motor por eventos existente. Exporta métricas por réplica, intervalos de confianza y gráficas sin descargar datos. **Los parámetros son hipotéticos y reemplazables: no constituyen reconstrucción histórica, predicción de seguridad ni mortalidad.** Los resultados geográficos de producción deben generarse y revisarse antes de redactar conclusiones numéricas.
+`scripts/evacuacion/experimentos.py` integra la población residencial, las réplicas de fuego y la red vial dirigida con el motor por eventos existente. Exporta métricas por réplica, intervalos de confianza y gráficas sin descargar datos. **La Parte 2 está completa en implementación y experimentos comparativos: terminaron las 120 corridas reales (30 por escenario) con cuatro procesos.** Los parámetros de respuesta son hipotéticos y reemplazables: los resultados no constituyen reconstrucción histórica, predicción de seguridad ni mortalidad. La calibración histórica del fuego **no valida la evacuación**. Este documento aporta solución, arquitectura, métodos, resultados y conclusiones para que la Parte 3 los integre al informe; el PDF, registro de IA, diapositivas y video siguen pendientes.
 
 ## Ejecución desde la raíz
 
-Primero medir dos trabajos reales con dos procesos; luego comparar las 120 corridas. Usar directorios nuevos o vacíos para no mezclar evidencia:
+Para reproducir, primero medir dos trabajos reales con dos procesos; luego comparar las 120 corridas. La producción ya completada está en `salidas/evacuacion_final`: **no sobrescribirla**, ni los parciales anteriores. Las órdenes siguientes usan directorios nuevos o vacíos; elegir otros nombres si ya existen:
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python scripts/evacuacion/experimentos.py --smoke --replicas 2 --scenario base --workers 2 --output salidas/evacuacion_smoke_parallel2
+PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python scripts/evacuacion/experimentos.py --smoke --replicas 2 --scenario base --workers 2 --output salidas/evacuacion_smoke_parallel2_reproduccion
 # Solo tras medir RAM/rendimiento y verificar equivalencia:
-PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python scripts/evacuacion/experimentos.py --replicas 30 --workers 2 --output salidas/evacuacion_final
+PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python scripts/evacuacion/experimentos.py --replicas 30 --workers 2 --output salidas/evacuacion_reproduccion
 ```
 
 Para comprobar los cuatro escenarios con una réplica: `--smoke --replicas 1`, sin `--scenario`. El programa imprime con `flush` las fases `preflight start/done`, `simulate start/done` (fin con tiempo de pared antes de distribución/exportación), `distribution done`, `example done`, `plots start/done` y `experiment complete`. Durante la simulación, el callback opcional `simulate(..., progress=callable)` informa tiempo modelado, horizonte, lotes procesados y personas seguras/restantes al inicio, cada ≥30 minutos modelados y al horizonte. El runner añade tiempo de pared solo a stdout; con `--workers >1` lanza procesos `spawn`. Los avisos de simulación incluyen PID/escenario/réplica y pueden intercalarse; el padre anuncia `workers start/done`. Un lote costoso puede demorar el siguiente aviso: estos mensajes prueban avance observado, no garantizan un latido cada cierto segundo. Una interrupción puede dejar resultados parciales: no reutilizar ese directorio como corrida final. La existencia de `summary.json` por sí sola no garantiza que todas las figuras hayan terminado: comprobar también el código de salida.
@@ -107,11 +107,11 @@ Cada IC usa estadísticas de réplicas independientes, error estándar muestral 
 
 ## Escala, evidencia y límites de resultados
 
-El grafo disponible al integrar tiene 31670 nodos, 64098 aristas dirigidas, seis salidas y 18 componentes; 935 nodos no tienen salida. La grilla es 205×278 con 40542 celdas positivas; el archivo contiene 30 fuegos con semillas 1000–1029. Estas dimensiones son evidencia de entradas, **no resultados de las 120 corridas**. Los totales precisos de habitantes y su inaccesibilidad se calculan desde los archivos y se publican en cada ejecución, no se copian de resúmenes redondeados.
+El grafo disponible al integrar tiene 31670 nodos, 64098 aristas dirigidas, seis salidas y 18 componentes; 935 nodos no tienen salida. La grilla es 205×278 con 40542 celdas positivas; el archivo contiene 30 fuegos con semillas 1000–1029. La producción conserva **50314 grupos y 42388.94983696542 personas ponderadas** según `metadata.attachment` del resumen. En 3700 celdas de origen, 94.98908536263116 personas (0.224089 %) no tienen salida topológica antes del fuego: permanecen en los denominadores.
 
 Se retiene una salida compacta del motor por proceso activo y un solo ejemplo representativo acotado en disco. Spawn copia entradas y memoria de simulación por hijo; el padre retiene entradas y hasta `2*N` entregas acotadas por sus llegadas exactas, no por todos los eventos. Medir primero dos procesos: no inferir que 15 núcleos o 24 GiB permiten cuatro. N tiene límite fijo 4, sin selección automática. `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1` en la orden evita sobresuscripción numérica; no hay dependencias nuevas ni cambios globales del entorno. Las llegadas exactas se transmiten a CSV por réplica; entre corridas solo quedan estadísticas escalares y histogramas gráficos acotados. Dentro de una corrida se retienen hasta 481 muestras de historia, primeras 100 travesías y registros activos hasta terminar, sin colecciones ocultas de detalles completados. Se conservan todos los estados finales, llegadas ponderadas y mapas de máximos/destinos. Los invariantes cubren **cada** travesía real, no solo la muestra. `metadata.detail_recording` documenta estos límites de registro; no describe cambios del modelo. El CSV de distribución puede ser grande; el ejemplo no exporta historias ni trayectorias completas. Ninguno es necesario para volver a calcular las medias/IC desde `replicas.csv`. La CDF gráfica agrupa tiempos en intervalos, pero conserva pesos; esto es una resolución visual, no muestreo ni aproximación de la simulación.
 
-El motor cachea rutas multifuente, pero las reservas, cierres y cambios de destinos factibles pueden invalidar cachés. No hay garantía de tiempo/memoria del lote real hasta medirlo; no sustituir población por una muestra para esconder un problema de rendimiento. Si la prueba real es lenta, registrar el tiempo y evaluar el motor en una unidad separada, sin cambiar silenciosamente semántica.
+El motor cachea rutas multifuente, pero las reservas, cierres y cambios de destinos factibles pueden invalidar cachés. La medición del lote terminado se presenta abajo; no garantiza tiempo/memoria en otro equipo ni configuración. No sustituir población por una muestra para esconder un problema de rendimiento. Si la prueba real es lenta, registrar el tiempo y evaluar el motor en una unidad separada, sin cambiar silenciosamente semántica.
 
 ## Comprobación geográfica preliminar
 
@@ -121,7 +121,83 @@ La corrida anterior, con retención completa dentro del motor, tardó 434,51 s (
 
 El benchmark compacto en `salidas/evacuacion_smoke_compact` terminó con código 0, según la verificación del orquestador: 377,38 s de pared, 371,73 s de simulación y 1229602816 bytes de RSS máximo (~1,23 GB). Todos los campos de `replicas.csv` y las estadísticas de escenarios/diferencias pareadas coincidieron exactamente con el modo completo; `distribution.csv` fue idéntico byte por byte. Se procesaron 22827498 travesías y 19154363 lotes de eventos. Es evidencia secuencial de una réplica. Después, dos réplicas base reales con dos procesos terminaron con código 0 y `PARALLEL2_REAL_EQUIVALENCE_AND_MASS_PASS`: 582,12 s de pared (413,192 s y 573,537 s de simulación por trabajo). La primera conservó exactamente todos los campos CSV y filas de distribución de la referencia; ambas aprobaron semillas, conservación, cotas y figuras. El RSS máximo reportado fue 2180825088 bytes; no mide la suma de memoria de todos los procesos. Se eligieron cuatro procesos con presupuesto conservador de cuatro veces ese máximo más padre y reserva, sobre 24 GiB de RAM. La suite de 63 pruebas y la verificación independiente de concurrencia y entorno aprobaron sin bloqueos.
 
-**Esto verifica una sola réplica; no sustituye las 30 por escenario ni permite concluir cuál intervención es mejor.** El primer lote secuencial se detuvo por exceder el tiempo disponible y conserva sus parciales. El nuevo lote de 120 corridas está en ejecución con cuatro procesos en `salidas/evacuacion_final`; todavía no hay prueba de terminación ni conclusiones finales. La extrapolación del ensayo paralelo ronda cinco horas para el lote completo si los otros escenarios cuestan parecido; no es una garantía. No paralelizar sin evaluar primero la memoria disponible. Los resultados finales y sus IC quedan pendientes del código de salida y de la revisión del lote completo. `salidas/evacuacion` contiene parciales detenidos: no borrar ni sobrescribir; usar `salidas/evacuacion_final` para la siguiente producción.
+Estas pruebas preliminares verificaron equivalencia, no efectos Monte Carlo. El primer lote secuencial se detuvo por tiempo y conserva parciales en `salidas/evacuacion`: no borrarlos, sobrescribirlos ni mezclarlos con resultados. **La producción posterior sí terminó** en `salidas/evacuacion_final`, como se documenta a continuación. Para otra ejecución usar un directorio nuevo.
+
+## Producción completada: resultados para el informe (S2.7 y S2.9)
+
+### Diseño y evidencia reproducible
+
+La corrida final contiene **120 simulaciones: 30 por cada uno de cuatro escenarios**, horizonte de **480 min desde las 06:25**. Cada escenario usa 30 fuegos distintos (índices 0–29, semillas **1000–1029**) y preparación **2000–2029**, pareadas por índice entre escenarios. Se mantiene toda la población; no hay submuestreo. `provisional: false` significa lote completo, **no validación histórica**; su clasificación es `hypothetical_mc`. Los supuestos efectivos están en `metadata.config` de [summary.json](../salidas/evacuacion_final/summary.json) y en [la configuración](../config/escenarios_evacuacion.json).
+
+Productos compactos versionados: [replicas.csv](../salidas/evacuacion_final/replicas.csv), [summary.json](../salidas/evacuacion_final/summary.json), [metrics.png](../salidas/evacuacion_final/metrics.png), [cdf.png](../salidas/evacuacion_final/cdf.png) y [queues.png](../salidas/evacuacion_final/queues.png). El CSV contiene las 120 filas para recalcular estadísticas; el JSON conserva hashes, semillas, supuestos y diferencias pareadas. `distribution.csv` (~156 MB) y `example_replica.json` (~200 KB) son productos **regenerables e ignorados por Git**, no archivos persistentes versionados: reproducirlos si se necesita la distribución exacta o el ejemplo.
+
+Según el registro de ejecución del orquestador, el trabajo 11 terminó con código 0 y **`FULL_PARALLEL_120_REPLICA_CHECK_PASS`**: orden canónico, 120 filas, 30 fuegos distintos por escenario y semillas pareadas, metadatos no provisionales/cuatro workers, conservación, cotas de exposición, IC finitos/ordenados, tres comparaciones pareadas, tres figuras y límites/invariantes del ejemplo aprobados. La comprobación completa incluyó distribución exacta, capacidades y cierres. Además, el orquestador recomputó desde las 120 filas CSV todas las medias e IC Student-t 95% por escenario y pareados, confirmó los cinco SHA256 de entrada y comprobó por streaming 1686400 llegadas exactas en 120 grupos escenario/réplica (pesos positivos, orden temporal, CDF, masa y conteos). Revisó visualmente las tres figuras: legibles, unidades correctas y CDF condicional. Todo aprobó. Esta evidencia de ejecución y revisión de artefactos es distinta de las pruebas sintéticas y de la validación histórica.
+
+Tiempo observado: **17849.23 s de pared (4 h 57 min 29 s)**, 69799.91 s de usuario y 167.65 s de sistema. `/usr/bin/time -l` informó **5048844288 bytes de RSS máximo**; **no es la suma del RSS del padre y todos los hijos ni una medición de la huella conjunta**. Para admitir cuatro workers en 24 GiB se presupuestaron conservadoramente `4 × 2180825088 = 8723300352 bytes` (~8.72 GB), más padre y reserva, a partir del ensayo de dos procesos; no se afirmó haber medido ese agregado. El benchmark compacto secuencial (~1.23 GB) y la igualdad exacta completo/compacto, seguida de la igualdad de la réplica real r0 en paralelo, sustentan la optimización sin cambiar métricas. En otro equipo hay que volver a medir antes de usar cuatro workers; dos también están soportados.
+
+### Resultados por escenario
+
+Cada celda muestra **media [IC 95%]**, redondeada desde el JSON, con **n=30** en todas las métricas mostradas. Los IC Student-t cuantifican variación entre réplicas bajo supuestos fijos, no incertidumbre histórica de parámetros ni un rango de predicción individual. Los identificadores coinciden con el CSV.
+
+| Escenario | Seguras antes del fuego (%) | Exposición potencial (personas ponderadas) |
+|---|---:|---:|
+| `base` | 42.8813 [41.4809, 44.2817] | 6325.65 [5526.43, 7124.87] |
+| `early_alert` | 46.0613 [45.2492, 46.8733] | 5699.07 [5130.58, 6267.56] |
+| `skyway_closed` | 20.7898 [19.3553, 22.2242] | 15084.47 [14061.88, 16107.07] |
+| `exit_capacity` | 41.2706 [40.1442, 42.3970] | 6885.82 [6104.14, 7667.51] |
+
+Los tiempos siguientes son minutos **desde la ignición**, no desde que sale el grupo. Se calcula cada estadístico ponderado por personas dentro de cada réplica y luego su media/IC entre réplicas. p50/p90 son promedios de percentiles por réplica, no percentiles de una única distribución agrupada. Todos están **condicionados a llegar a destino seguro**, incluidos quienes pudieron tener exposición previa.
+
+| Escenario | Media de llegada (min) | p50 (min) | p90 (min) |
+|---|---:|---:|---:|
+| `base` | 168.22 [166.50, 169.94] | 144.66 [142.52, 146.80] | 267.81 [263.21, 272.41] |
+| `early_alert` | 143.22 [141.28, 145.16] | 120.32 [118.06, 122.59] | 249.07 [243.78, 254.36] |
+| `skyway_closed` | 141.84 [138.17, 145.51] | 126.99 [124.74, 129.24] | 209.75 [199.71, 219.79] |
+| `exit_capacity` | 167.89 [166.48, 169.30] | 142.30 [140.87, 143.73] | 268.15 [263.45, 272.85] |
+
+**Lectura de estados:** `people_safe` puede incluir llegadas con exposición potencial previa; `people_safe_before_fire` las excluye. La conservación es `safe + temporary + remaining = total`: exposición se superpone con esos estados y **no** se suma como otra categoría de masa. `remaining` significa no haber llegado a un destino al horizonte, **no fallecidos ni necesariamente atrapados**. `people_temporary=0` en las 120 corridas porque los destinos de producción son solo salidas hipotéticas del dominio; no demuestra ausencia histórica de refugios ni su eficacia. El motor distingue destinos temporales y seguros, pero aquí no se afirman refugios históricos.
+
+### Colas: longitud, duración e integrales
+
+Se reportan máximos simultáneos de la cola agregada del sistema (no longitud física en metros), promediados entre réplicas. `queue_duration_min` integra el tiempo con cola no vacía: **incluye espera sin ruta disponible**, no únicamente espera por capacidad en un cuello de botella singular; excluye preparación y tránsito. Adelantar la alerta también amplía la ventana posible de espera dentro del horizonte fijo, por lo que mayor duración no implica por sí sola peor evacuación.
+
+| Escenario | Máximo (grupos) | Máximo (personas ponderadas) | Duración (min) |
+|---|---:|---:|---:|
+| `base` | 27670.70 [27196.26, 28145.14] | 24815.81 [24499.71, 25131.92] | 394.855 [394.819, 394.892] |
+| `early_alert` | 28972.53 [28510.26, 29434.81] | 24790.04 [24524.09, 25055.99] | 424.780 [424.738, 424.822] |
+| `skyway_closed` | 32318.90 [31779.10, 32858.70] | 28770.61 [28332.50, 29208.73] | 394.887 [394.862, 394.912] |
+| `exit_capacity` | 27932.40 [27430.98, 28433.82] | 25693.95 [25349.14, 26038.76] | 394.855 [394.819, 394.892] |
+
+| Escenario | Integral (grupos·min) | Integral (personas ponderadas·min) |
+|---|---:|---:|
+| `base` | 8818782.40 [8599989.37, 9037575.43] | 7566892.15 [7442874.68, 7690909.63] |
+| `early_alert` | 9423236.61 [9226334.70, 9620138.53] | 8053524.09 [7959064.06, 8147984.12] |
+| `skyway_closed` | 9755988.58 [9499942.98, 10012034.18] | 8526086.85 [8289598.73, 8762574.98] |
+| `exit_capacity` | 8932486.57 [8713311.33, 9151661.81] | 7731286.59 [7602335.65, 7860237.54] |
+
+### Efectos pareados e interpretación
+
+**Alternativa menos base**, con los IC pareados almacenados en `paired_differences_vs_base` (no restando extremos de IC marginales). La fracción se expresa en **puntos porcentuales (pp), no porcentaje relativo**; n=30 parejas.
+
+| Alternativa | Δ seguras antes del fuego (pp) | Δ exposición (personas ponderadas) |
+|---|---:|---:|
+| `early_alert` | +3.1800 [+2.4621, +3.8978] | −626.58 [−954.66, −298.51] |
+| `skyway_closed` | −22.0915 [−22.4535, −21.7295] | +8758.82 [+7602.87, +9914.78] |
+| `exit_capacity` | −1.6107 [−1.9987, −1.2226] | +560.17 [+405.98, +714.36] |
+
+- **Alerta temprana:** bajo este modelo, adelantarla 30 min se asocia con ~3.18 pp más de llegadas seguras antes del fuego y menor exposición potencial.
+- **Cierre de Skyway:** reduce esa fracción ~22.09 pp y aumenta exposición. Su media de llegada menor **no representa mejor evacuación**: se condiciona a un subconjunto seguro mucho menor (~8817 personas frente a ~18188 en base), no al total inicial.
+- **Capacidad de una salida:** duplicar de 5000 a 10000 personas la capacidad del destino `n1` da ~1.61 pp menos, un resultado contraintuitivo. El enrutamiento voraz y las reservas son reglas del modelo, **pero no se aisló ni verificó el mecanismo que explica este efecto**. Requiere diagnóstico adicional antes de recomendar políticas: no demuestra que más capacidad sea siempre perjudicial ni autoriza cambiar parámetros para forzar una mejora.
+
+**Conclusión para el informe:** la implementación permite comparar un factor a la vez con fuego y preparación pareados, población conservada y métricas reproducibles. La señal favorable de alerta temprana y la sensibilidad al cierre de Skyway se limitan a esta parametrización. La evidencia histórica de avisos, cierres y refugios, la calibración/validación de respuesta y el diagnóstico del efecto de capacidad siguen siendo necesarios para trasladar hallazgos a decisiones reales. La Parte 3 debe integrar estas secciones y figuras en sus entregables; completar los experimentos no completa todo el proyecto.
+
+### Figuras de producción
+
+![Fracción segura antes del fuego y exposición potencial, medias e IC 95%](../salidas/evacuacion_final/metrics.png)
+
+![CDF ponderada condicional de tiempos de llegada segura; no es un IC ni incluye quienes no llegaron](../salidas/evacuacion_final/cdf.png)
+
+![Colas y tiempo medio condicional de llegada, medias e IC 95%](../salidas/evacuacion_final/queues.png)
 
 ## Verificación automatizada
 
@@ -132,4 +208,6 @@ PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" .venv/bin/python
 
 Las pruebas usan NPZ y grafos sintéticos pequeños, incluida CLI en directorios temporales aislados: masa/restos minúsculos, conectividad, celdas de borde/rotación y empates, alertas/preparación separadas, un solo factor, dos sentidos de Skyway, elección de una única salida, repetibilidad, semillas/fuegos distintos y pareados, Student-t, tiempos nulos, integrales de cola, invariantes del motor, rechazos sin escrituras, smoke, selección, esquema, distribución y figuras. La equivalencia pública con 120 trabajos **sintéticos** compara CSV/distribución/ejemplo byte por byte y resumen exacto normalizando solamente `metadata.worker_count`; comprueba orden y semillas. Incluye script spawn con un solo trabajo y dos workers, validación 0/5/no entero/bool sin salidas, error real de worker y unión de hijos. El planificador también se prueba con error/Ctrl-C simulado para comprobar límite, cancelación y shutdown. No se encontró un fallo post-preflight público fiable sin agregar flags de prueba o mutaciones dependientes de carreras; el fallo de proceso se prueba en la interfaz privada del planificador. Estas pruebas no ejecutan el lote geográfico. Cobertura de integración: S2.2 y S2.5–S2.9; S2.3–S2.4 se reutilizan del motor.
 
-**Risk:** integración de gran escala, distribución de preparación y acceso instantáneo sin calibración histórica; rendimiento real pendiente y revisión independiente requerida antes de interpretar escenarios.
+La suite actual de **63 pruebas** y la verificación independiente de código/concurrencia y entorno aprobaron sobre el candidato `d2a06aa`, sin cambios de código posteriores. Los conteos anteriores (por ejemplo, 53 pruebas) son referencias históricas, no la cobertura actual. Esta actualización es documental: no volvió a ejecutar la suite ni la verificación independiente.
+
+**Límites de aplicación:** preparación, respuesta vial, capacidades y acceso instantáneo sin calibración histórica. Los experimentos están completos bajo esos supuestos, no históricamente validados; no habilitan recomendaciones operativas sin evidencia y diagnóstico adicionales.

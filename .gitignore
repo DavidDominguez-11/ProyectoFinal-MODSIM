@@ -227,5 +227,7 @@ data/crudo/
 /salidas/evacuacion_smoke*/
 /salidas/evacuacion/example_replica.json
 /salidas/evacuacion/distribution.csv
+# Primer lote secuencial interrumpido: conservar evidencia local, no resultado final.
+/salidas/evacuacion/replicas.csv
 /salidas/evacuacion_final/example_replica.json
 /salidas/evacuacion_final/distribution.csv
