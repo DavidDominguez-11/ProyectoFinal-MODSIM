@@ -100,7 +100,7 @@ def _validate(network, groups, fire, horizon, closed_edges):
     return nodes, edges, destinations, node_fire, edge_fire, origin_fire
 
 
-def simulate(network, groups, fire, horizon=480, closed_edges=None):
+def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=None):
     """Simular sin mutar entradas; ver docs/motor_evacuacion.md para el contrato."""
     try:
         nodes, edges, destinations, node_fire, edge_fire, origin_fire = _validate(
@@ -142,6 +142,8 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None):
     max_queue_groups = 0
     max_queue_people = 0.0
     route_cache = {}
+    event_batches = 0
+    last_progress_min = None
 
     def event(when, priority, kind, payload):
         nonlocal sequence
@@ -428,6 +430,13 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None):
         max_queue_groups = max(max_queue_groups, queue_groups)
         max_queue_people = max(max_queue_people, max(0.0, queue_people))
         snapshot()
+        if progress is not None:
+            event_batches += 1
+            if last_progress_min is None or time - last_progress_min >= 30 or time == horizon:
+                progress({'time_min': time, 'horizon': horizon, 'event_batches': event_batches,
+                          'people_safe': safe_people, 'people_temporary': temporary_people,
+                          'people_remaining': total - safe_people - temporary_people})
+                last_progress_min = time
     # El horizonte trunca recorridos activos sin inventar una llegada.
     for g in states:
         if g['state'] == 'traveling':

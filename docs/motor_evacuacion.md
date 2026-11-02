@@ -43,6 +43,14 @@ Las celdas explícitas deben estar dentro de la grilla. Si falta `node.cell`, se
 
 Las entradas inválidas producen `ValueError` antes de iniciar la simulación. Ninguna entrada se modifica. No se permite capacidad infinita: incluso los destinos de salida necesitan una capacidad finita explícita.
 
+## Progreso opcional sin alterar resultados
+
+`simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=None)` acepta un callback solo por palabra clave. Por defecto no emite avisos ni cambia el objeto de resultado. Con `progress=callable`, después del despacho y snapshot de un lote se entrega un diccionario nuevo con `time_min`, `horizon`, `event_batches`, `people_safe`, `people_temporary` y `people_remaining`. Se informa el primer lote (t=0), luego cada ≥30 minutos modelados respecto del último aviso y siempre el horizonte (incluido horizonte cero sin duplicados).
+
+El callback no recibe referencias a grupos, rutas ni historia. No introduce RNG, eventos adicionales, relojes por evento, hilos ni dependencias. Sus excepciones se propagan; debe limitarse a observar y no modificar entradas externas. Un lote lento o un intervalo largo en tiempo de pared puede retrasar avisos: no es un temporizador de salud ni garantía de tiempo máximo entre mensajes. El runner imprime estos avisos y las fases con `flush`, añadiendo tiempo de pared solo en stdout.
+
+La salida pública del motor sigue siendo **completa**. El runner exporta aparte `example_replica.json`, esquema `evacuation_representative_example` versión 1: escalares/métricas completas, conteos totales/exportados y truncamiento explícito; primeros 100 grupos de entrada/finales y travesías, hasta 481 índices uniformes de historia incluidos extremos. Omite mapas de ocupación/destinos y llegadas individuales (estas siguen exactas en `distribution.csv`). Este ejemplo ilustrativo no es la trayectoria completa ni modifica la simulación. Véase [modelo_evacuacion.md](modelo_evacuacion.md).
+
 ## Decisiones de simulación
 
 - Se procesan eventos con `heapq`: primero cierres, después fuego en nodos/orígenes, después llegadas y finalmente preparación. La igualdad temporal con el fuego **no** acredita una llegada segura por ese tramo.

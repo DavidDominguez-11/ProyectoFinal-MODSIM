@@ -43,6 +43,33 @@ class MotorTests(unittest.TestCase):
                                                      {'time_min': 4, 'people': 1.75}])
         json.dumps(result, allow_nan=False)
 
+    def test_progress_is_ordered_reaches_horizon_and_preserves_result_bytes(self):
+        groups = [group(str(i), people=.125, ready=i * 2) for i in range(100)]
+        for horizon in (0, 240):
+            with self.subTest(horizon=horizon):
+                baseline = self.run_model(groups=groups, horizon=horizon)
+                reports = []
+                observed = self.run_model(groups=groups, horizon=horizon, progress=reports.append)
+                self.assertEqual(json.dumps(observed), json.dumps(baseline))
+                self.assertEqual(json.dumps(self.run_model(groups=groups, horizon=horizon,
+                                                          progress=None)), json.dumps(baseline))
+                self.assertEqual(reports[0]['time_min'], 0)
+                self.assertEqual(reports[-1]['time_min'], horizon)
+                self.assertEqual([r['time_min'] for r in reports],
+                                 sorted({r['time_min'] for r in reports}))
+                self.assertLessEqual(len(reports), horizon // 30 + 2)
+                batches = [r['event_batches'] for r in reports]
+                self.assertEqual(batches, sorted(batches))
+                for report in reports:
+                    self.assertEqual(report['horizon'], horizon)
+                    sample = next(s for s in observed['history']
+                                  if s['time_min'] == report['time_min'])
+                    for key in ('people_safe', 'people_temporary', 'people_remaining'):
+                        self.assertEqual(report[key], sample[key])
+                    self.assertAlmostEqual(sum(report[k] for k in
+                                           ('people_safe', 'people_temporary', 'people_remaining')),
+                                           baseline['people_total'])
+
     def test_fifo_capacity_and_queue_integrals(self):
         result = self.run_model(groups=[group('first'), group('second'), group('third')])
         self.assertEqual([g['finish_min'] for g in result['groups']], [2, 4, 6])

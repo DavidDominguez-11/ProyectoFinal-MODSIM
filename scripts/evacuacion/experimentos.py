@@ -279,6 +279,37 @@ def summarize_replica(result):
     return metrics
 
 
+def representative_example(run, groups, result, metrics):
+    """Proyección acotada: nunca entregar el resultado completo a json.dump."""
+    history = result['history']
+    count = min(481, len(history))
+    indices = ([i * (len(history) - 1) // (count - 1) for i in range(count)]
+               if count > 1 else [0])
+    sampled = {key: value for key, value in result.items()
+               if isinstance(value, (int, float, bool, str)) or value is None}
+    sampled.update(groups=result['groups'][:100], traversals=result['traversals'][:100],
+                   history=[history[i] for i in indices])
+    records = {'input_groups': groups, **{key: result[key] for key in
+               ('groups', 'traversals', 'history', 'evacuation_times',
+                'edge_max_occupancy', 'destination_people')}}
+    counts = {key: len(value) for key, value in records.items()}
+    exported = {'input_groups': min(100, len(groups)),
+                **{key: len(sampled.get(key, [])) for key in counts if key != 'input_groups'}}
+    return {'schema': 'evacuation_representative_example', 'version': 1,
+            'representative': True,
+            'description': 'Representative illustrative samples, not a full trajectory; metrics use the full run.',
+            'run': run, 'metrics': metrics, 'record_counts': counts,
+            'exported_counts': exported,
+            'truncated': {key: exported[key] < counts[key] for key in counts},
+            'selection': {'input_groups': 'first 100', 'groups': 'first 100',
+                          'traversals': 'first 100',
+                          'history': 'at most 481 uniformly spaced record indices, including first/last',
+                          'evacuation_times': 'omitted; exact distribution.csv',
+                          'edge_max_occupancy': 'omitted; scalar capacity_invariant retained',
+                          'destination_people': 'omitted; scalar population totals retained'},
+            'input_groups': groups[:100], 'result': sampled}
+
+
 def _read_json(path):
     with Path(path).open(encoding='utf-8') as stream:
         return json.load(stream)
@@ -385,8 +416,10 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
     scenarios = tuple(SCENARIOS if scenarios is None else scenarios)
     if not scenarios or len(set(scenarios)) != len(scenarios) or any(s not in SCENARIOS for s in scenarios):
         raise ValueError('Selección de escenarios inválida')
+    print('phase=preflight start', flush=True)
     network, population, fire, seeds, contract, config, attachment, hashes = load_inputs(
         paths, replicas, smoke)
+    print('phase=preflight done', flush=True)
     output = Path(paths['output'])
     # Evitar mezclar una corrida con archivos viejos o sobrescribir evidencia.
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
@@ -425,8 +458,21 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
             for scenario in scenarios:
                 adapted, prepared, closed, intervention = scenario_inputs(network, groups, config, scenario)
                 print(f'{scenario} r={r + 1}/{replicas} start elapsed={time.perf_counter() - started:.3f}s', flush=True)
+                simulation_started = time.perf_counter()
+                print(f'phase=simulate start scenario={scenario} replica={r}', flush=True)
+
+                def report_progress(sample):
+                    print(f'phase=simulate progress scenario={scenario} replica={r} '
+                          f'modeled_min={sample["time_min"]:.3f} horizon={sample["horizon"]} '
+                          f'batches={sample["event_batches"]} safe={sample["people_safe"]} '
+                          f'remaining={sample["people_remaining"]} '
+                          f'wall={time.perf_counter() - simulation_started:.3f}s', flush=True)
+
                 result = simulate(adapted, prepared, replica_fire,
-                                  horizon=contract['horizonte_min'], closed_edges=closed)
+                                  horizon=contract['horizonte_min'], closed_edges=closed,
+                                  progress=report_progress)
+                print(f'phase=simulate done scenario={scenario} replica={r} '
+                      f'wall={time.perf_counter() - simulation_started:.3f}s', flush=True)
                 metrics = summarize_replica(result)
                 run = {'scenario': scenario, 'replica': r, 'fire_index': r,
                        'fire_seed': int(seeds[r]), 'preparation_seed': preparation_seed,
@@ -454,10 +500,11 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
                     distributions[scenario] += counts
                 distribution_stream.flush()
                 del arrivals
+                print(f'phase=distribution done scenario={scenario} replica={r}', flush=True)
                 if r == 0 and scenario == scenarios[0]:
-                    # Un solo ejemplo completo, no todas las trayectorias de 120 corridas.
                     _write_json(output / 'example_replica.json',
-                                {'run': run, 'input_groups': prepared, 'result': result})
+                                representative_example(run, prepared, result, metrics))
+                    print(f'phase=example done scenario={scenario} replica={r}', flush=True)
                 del result, adapted, prepared
                 print(f'{scenario} r={r + 1}/{replicas} done elapsed={time.perf_counter() - started:.3f}s', flush=True)
     summaries = {s: {metric: confidence_interval(row[metric] for row in rows[s])
@@ -473,7 +520,10 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
                     for metric in rows['base'][0]}
     summary = {'metadata': metadata, 'scenarios': summaries, 'paired_differences_vs_base': paired}
     _write_json(output / 'summary.json', summary)
+    print('phase=plots start', flush=True)
     _plot_outputs(output, summaries, distributions, bin_edges, bool(smoke))
+    print('phase=plots done', flush=True)
+    print(f'phase=experiment complete elapsed={time.perf_counter() - started:.3f}s', flush=True)
     return summary
 
 

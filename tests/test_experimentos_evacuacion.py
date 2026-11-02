@@ -283,6 +283,67 @@ class ExperimentTests(unittest.TestCase):
             summary = json.loads((output / 'summary.json').read_text())
             self.assertEqual(list(summary['scenarios']), ['base'])
 
+    def test_cli_example_is_bounded_but_full_run_products_are_exact(self):
+        self.population[0, 0] = 1800.25
+        self.network['edges'][0]['travel_min'] = .1
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            paths = self.fixtures(folder)
+            output = folder / 'bounded'
+            completed = self.cli(paths, output, '--smoke', '--replicas', '1', '--scenario', 'base')
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            example = json.loads((output / 'example_replica.json').read_text())
+            self.assertLessEqual(len(example['input_groups']), 100)
+            self.assertEqual(example['schema'], 'evacuation_representative_example')
+            self.assertEqual(example['version'], 1)
+            self.assertTrue(example['representative'])
+            network = exp.prepare_network(self.network, self.contract)
+            groups, _ = exp.make_groups(self.population, network, self.contract, self.config, 2000)
+            adapted, prepared, closed, _ = exp.scenario_inputs(network, groups, self.config, 'base')
+            full = exp.simulate(adapted, prepared, self.fire[0].tolist(), 480, closed)
+            metrics = exp.summarize_replica(full)
+            self.assertEqual(example['metrics'], metrics)
+            self.assertEqual(example['input_groups'], prepared[:100])
+            for key in ('groups', 'traversals'):
+                self.assertGreater(len(full[key]), 100)
+                self.assertEqual(example['result'][key], full[key][:100])
+            self.assertGreater(len(full['history']), 481)
+            history = example['result']['history']
+            indices = [i * (len(full['history']) - 1) // 480 for i in range(481)]
+            self.assertEqual(history, [full['history'][i] for i in indices])
+            self.assertEqual(history[0], full['history'][0])
+            self.assertEqual(history[-1], full['history'][-1])
+            records = {'input_groups': prepared, **{k: full[k] for k in
+                       ('groups', 'traversals', 'history', 'evacuation_times',
+                        'edge_max_occupancy', 'destination_people')}}
+            for key, records_full in records.items():
+                exported = example['input_groups'] if key == 'input_groups' else example['result'].get(key, [])
+                self.assertEqual(example['record_counts'][key], len(records_full))
+                self.assertEqual(example['truncated'][key], len(exported) < len(records_full))
+            for key, value in full.items():
+                if not isinstance(value, (dict, list)):
+                    self.assertEqual(example['result'][key], value)
+            for key in ('evacuation_times', 'edge_max_occupancy', 'destination_people'):
+                self.assertNotIn(key, example['result'])
+            self.assertLess((output / 'example_replica.json').stat().st_size, 300000)
+            with (output / 'replicas.csv').open() as stream:
+                row = next(csv.DictReader(stream))
+            summary = json.loads((output / 'summary.json').read_text())
+            for key, value in metrics.items():
+                self.assertEqual(float(row[key]), value)
+                self.assertEqual(summary['scenarios']['base'][key]['mean'], value)
+            with (output / 'distribution.csv').open() as stream:
+                arrivals = list(csv.DictReader(stream))
+            self.assertEqual([(float(a['time_min']), float(a['people'])) for a in arrivals],
+                             [(a['time_min'], a['people']) for a in
+                              sorted(full['evacuation_times'], key=lambda a: a['time_min'])])
+            phases = ['phase=preflight start', 'phase=preflight done', 'phase=simulate start',
+                      'phase=simulate progress', 'phase=simulate done', 'phase=distribution done',
+                      'phase=example done', 'phase=plots start', 'phase=plots done',
+                      'phase=experiment complete']
+            positions = [completed.stdout.index(phase) for phase in phases]
+            self.assertEqual(positions, sorted(positions))
+
     def test_config_validation_boundaries(self):
         invalid = [('group_max_people', 0), ('preparation_gamma_shape', -1),
                    ('preparation_gamma_scale_min', math.inf), ('base_alert_min', -1),
