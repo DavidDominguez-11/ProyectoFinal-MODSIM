@@ -1,0 +1,26 @@
+{
+  "group_max_people": 3.0,
+  "distribution_bins": 480,
+  "base_alert_min": 85.0,
+  "early_alert_delta_min": -30.0,
+  "preparation_gamma_shape": 2.0,
+  "preparation_gamma_scale_min": 10.0,
+  "preparation_seed_start": 2000,
+  "base_exit_capacity_people": 5000.0,
+  "increased_exit_capacity_people": 10000.0,
+  "capacity_target_node": null,
+  "closed_corridor": "Skyway",
+  "assumptions": {
+    "status": "Supuestos hipotéticos reemplazables; no son parámetros históricos ni calibrados. Pendiente evidencia de Parte 3.",
+    "clock": "Minutos desde 2018-11-08 06:25 local; alerta uniforme a 85 min, alternativa a 55 min.",
+    "preparation": "Preparación independiente gamma forma 2 y escala 10 min; positiva y asimétrica, no ajustada a observaciones. ready_min = alerta + preparación.",
+    "groups": "Cada celda positiva se divide en grupos de hasta 3 personas ponderadas; todo resto positivo se conserva. No son hogares históricos. Cada resto ocupa una plaza vial completa.",
+    "attachment": "Nodo euclídeo más cercano con cKDTree en UTM; empates por identificador lexicográfico. Acceso celda-nodo instantáneo, sin tiempo ni exposición durante el salto.",
+    "boundary": "Se invierte transform_gdal; nodos exactamente en el límite se sujetan a la celda adyacente interior. No se desplazan nodos ni conectan componentes.",
+    "destinations": "Salidas seguras absorbentes hipotéticas: 5000 personas cada una en todos los escenarios; una salida determinista admite 10000 en la alternativa. null selecciona el identificador de salida lexicográficamente menor.",
+    "route": "Cierre inicial de todas las aristas cuyo nombre contiene la palabra Skyway, en ambas direcciones; sin contraflujo inventado.",
+    "pairing": "Réplica r usa fuego r, semilla de fuego del archivo y preparación 2000+r; mismos grupos, pesos y fuego en los cuatro escenarios.",
+    "population": "Población residencial ponderada de grilla, no población presente durante el incendio; se conservan también orígenes sin salida.",
+    "road": "Velocidades, capacidades viales en grupos simultáneos y bidireccionalidad se heredan del JSON vial; no calibradas históricamente."
+  }
+}
