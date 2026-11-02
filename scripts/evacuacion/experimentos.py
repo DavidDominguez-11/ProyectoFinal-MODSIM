@@ -274,7 +274,12 @@ def summarize_replica(result):
         raise ValueError('Masa no conservada por motor')
     metrics = {k: result[k] for k in PEOPLE_METRICS + QUEUE_METRICS}
     metrics['fraction_safe_before_fire'] = result['people_safe_before_fire'] / total
-    metrics['queue_duration_min'] = queue_duration(result['history'])
+    if 'queue_duration_min' in result:
+        metrics['queue_duration_min'] = result['queue_duration_min']
+    elif result.get('detail_retention', {}).get('mode') == 'compact':
+        raise ValueError('Resultado compacto sin duración exacta de colas')
+    else:
+        metrics['queue_duration_min'] = queue_duration(result['history'])
     metrics.update(evacuation_statistics(result['evacuation_times']))
     return metrics
 
@@ -293,6 +298,10 @@ def representative_example(run, groups, result, metrics):
                ('groups', 'traversals', 'history', 'evacuation_times',
                 'edge_max_occupancy', 'destination_people')}}
     counts = {key: len(value) for key, value in records.items()}
+    retention = result.get('detail_retention', {})
+    if retention.get('mode') == 'compact':
+        counts.update(history=retention['history_records'],
+                      traversals=retention['traversal_records'])
     exported = {'input_groups': min(100, len(groups)),
                 **{key: len(sampled.get(key, [])) for key in counts if key != 'input_groups'}}
     return {'schema': 'evacuation_representative_example', 'version': 1,
@@ -303,7 +312,8 @@ def representative_example(run, groups, result, metrics):
             'truncated': {key: exported[key] < counts[key] for key in counts},
             'selection': {'input_groups': 'first 100', 'groups': 'first 100',
                           'traversals': 'first 100',
-                          'history': 'at most 481 uniformly spaced record indices, including first/last',
+                          'history': retention.get('history_selection',
+                              'at most 481 uniformly spaced record indices, including first/last'),
                           'evacuation_times': 'omitted; exact distribution.csv',
                           'edge_max_occupancy': 'omitted; scalar capacity_invariant retained',
                           'destination_people': 'omitted; scalar population totals retained'},
@@ -437,6 +447,11 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
                 'ci_method': 'Student-t bilateral 95%; estadística por réplica independiente; n excluye null',
                 'distribution': 'CSV exacto por réplica; CDF gráfica por intervalos uniformes, conserva masa segura. No es IC.',
                 'distribution_bins': config['distribution_bins'],
+                'detail_recording': {
+                    'mode': 'compact', 'traversal_limit': 100, 'history_limit': 481,
+                    'history': 'first actual event per 1/480 horizon interval, plus horizon',
+                    'metrics': 'all events/traversals; online exact queue integrals; complete weighted arrivals',
+                    'example': 'representative only; full original counts and truncation disclosed'},
                 'runs': []}
     rows = {scenario: [] for scenario in scenarios}
     bin_edges = np.linspace(0, contract['horizonte_min'], config['distribution_bins'] + 1)
@@ -470,7 +485,7 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
 
                 result = simulate(adapted, prepared, replica_fire,
                                   horizon=contract['horizonte_min'], closed_edges=closed,
-                                  progress=report_progress)
+                                  progress=report_progress, retain_details=False)
                 print(f'phase=simulate done scenario={scenario} replica={r} '
                       f'wall={time.perf_counter() - simulation_started:.3f}s', flush=True)
                 metrics = summarize_replica(result)

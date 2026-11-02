@@ -45,11 +45,19 @@ Las entradas inválidas producen `ValueError` antes de iniciar la simulación. N
 
 ## Progreso opcional sin alterar resultados
 
-`simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=None)` acepta un callback solo por palabra clave. Por defecto no emite avisos ni cambia el objeto de resultado. Con `progress=callable`, después del despacho y snapshot de un lote se entrega un diccionario nuevo con `time_min`, `horizon`, `event_batches`, `people_safe`, `people_temporary` y `people_remaining`. Se informa el primer lote (t=0), luego cada ≥30 minutos modelados respecto del último aviso y siempre el horizonte (incluido horizonte cero sin duplicados).
+`simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=None, retain_details=True)` acepta un callback solo por palabra clave. Por defecto no emite avisos ni cambia el objeto de resultado. Con `progress=callable`, después del despacho y snapshot de un lote se entrega un diccionario nuevo con `time_min`, `horizon`, `event_batches`, `people_safe`, `people_temporary` y `people_remaining`. Se informa el primer lote (t=0), luego cada ≥30 minutos modelados respecto del último aviso y siempre el horizonte (incluido horizonte cero sin duplicados).
 
 El callback no recibe referencias a grupos, rutas ni historia. No introduce RNG, eventos adicionales, relojes por evento, hilos ni dependencias. Sus excepciones se propagan; debe limitarse a observar y no modificar entradas externas. Un lote lento o un intervalo largo en tiempo de pared puede retrasar avisos: no es un temporizador de salud ni garantía de tiempo máximo entre mensajes. El runner imprime estos avisos y las fases con `flush`, añadiendo tiempo de pared solo en stdout.
 
-La salida pública del motor sigue siendo **completa**. El runner exporta aparte `example_replica.json`, esquema `evacuation_representative_example` versión 1: escalares/métricas completas, conteos totales/exportados y truncamiento explícito; primeros 100 grupos de entrada/finales y travesías, hasta 481 índices uniformes de historia incluidos extremos. Omite mapas de ocupación/destinos y llegadas individuales (estas siguen exactas en `distribution.csv`). Este ejemplo ilustrativo no es la trayectoria completa ni modifica la simulación. Véase [modelo_evacuacion.md](modelo_evacuacion.md).
+## Retención opcional de detalles
+
+La API pública conserva **por defecto** historia y travesías completas (`retain_details=True`). El runner usa `retain_details=False`: retiene las primeras 100 travesías y como máximo 481 muestras de historia, sin cambiar ningún evento, grupo, ruta, reserva, tiempo ni fuego. Guarda el primer evento real de cada franja de 1/480 del horizonte, más el horizonte; incluye cero, sin interpolar ni añadir eventos. Para horizonte 480 son franjas de un minuto. Para horizonte cero guarda una sola muestra. Las muestras conservan población y tiempos estrictamente crecientes, pero **no** sirven para integrar colas.
+
+Ambos modos calculan `queue_duration_min` en línea: antes de cada lote real integran el indicador `queue_groups > 0` durante el intervalo transcurrido. Una suma de parciales flotantes reproduce `math.fsum` de los intervalos completos sin retenerlos. Las integrales de grupos/personas, exposición y máximos tampoco dependen del muestreo. Se comprueba cada travesía al terminar, interrumpirse o alcanzar el horizonte; los invariantes no se calculan sobre las primeras 100. Los registros activos siguen disponibles para identidad de llegadas e interrupciones y se liberan al finalizar (salvo los primeros 100 ilustrativos).
+
+Solo el resultado compacto añade `detail_retention`: `history_records` cuenta todos los lotes de tiempo distintos que habría guardado el modo completo; `traversal_records` cuenta cada inicio, incluidas interrupciones y viajes truncados. No son longitudes de muestras. Incluye límites y criterios de selección. Los estados finales de **todos** los grupos, llegadas ponderadas completas, destinos y máximos por arista siguen disponibles en ambos modos.
+
+El runner exporta aparte `example_replica.json`, esquema `evacuation_representative_example` versión 1: escalares/métricas exactos, conteos originales/exportados y truncamiento explícito; primeros 100 grupos de entrada/finales y travesías, historia ilustrativa. Si se proyecta un resultado completo se conserva la selección previa de hasta 481 índices uniformes, incluidos extremos. Omite mapas de ocupación/destinos y llegadas individuales (estas siguen exactas en `distribution.csv`). Véase [modelo_evacuacion.md](modelo_evacuacion.md).
 
 ## Decisiones de simulación
 
@@ -68,7 +76,7 @@ Las tablas de rutas usan Dijkstra **inverso multifuente**, no una búsqueda por 
 
 El despacho mantiene colas bloqueadas por tramo y despierta plazas al liberarse capacidad. Un índice por peso despierta grupos cuya factibilidad cambia al reservar capacidad de destino. Los nodos mantienen residentes y las reservas mantienen sus titulares: preparación y llegadas ordinarias no recorren todos los hogares. Las muestras poblacionales usan acumuladores, no sumas completas por evento. Los cierres sí pueden despertar colas en toda la red; muchos conjuntos distintos de destinos factibles pueden requerir varias tablas por topología.
 
-La prueba pública de escala procesa 50.000 grupos de 0,125 personas, cuatro plazas viales y un grupo desconectado. No representa el costo de 120 corridas sobre la red geográfica: ese tiempo y su memoria todavía deben medirse en integración. El historial y las trayectorias se retienen completos por corrida.
+La prueba pública de escala procesa 50.000 grupos de 0,125 personas, cuatro plazas viales y un grupo desconectado. No representa el costo de 120 corridas sobre la red geográfica: ese tiempo y su memoria todavía deben medirse en integración. El modo compacto evita retener un diccionario de historia por lote y millones de travesías terminadas; no reduce la cantidad de eventos procesados ni garantiza una mejora de tiempo determinada.
 
 ## Esquema completo de salida JSON
 
@@ -84,6 +92,7 @@ Los siguientes valores ilustran el ejemplo mínimo. Los objetos no contienen inf
   "people_exposed": 0.0,
   "queue_group_minutes": 0.0,
   "queue_person_minutes": 0.0,
+  "queue_duration_min": 0.0,
   "max_queue_groups": 0,
   "max_queue_people": 0.0,
   "capacity_invariant": true,
@@ -121,7 +130,7 @@ Los siguientes valores ilustran el ejemplo mínimo. Los objetos no contienen inf
 | `people_total` | Masa inicial; `safe + temporary + remaining` la conserva con tolerancia flotante. |
 | `people_exposed` | Subconjunto transversal de la población, no una categoría adicional de conservación ni mortalidad. |
 | `evacuation_times` | Llegadas seguras con su peso, para distribuciones/percentiles ponderados; minutos desde el inicio global, no desde preparación. |
-| `history` | Muestras posteriores al despacho por tiempo de evento, incluye cero y horizonte; interpolación constante entre muestras. |
+| `history` | Muestras posteriores al despacho, incluye cero y horizonte. Completa por defecto; selección ilustrativa acotada en modo compacto, no interpolable para métricas exactas. |
 | Métricas de cola | Integrales exactas hasta horizonte; incluyen espera sin ruta y excluyen preparación, tránsito y refugios. Máximos después del despacho, no esperas de duración cero. |
 | `destination_people` | Ocupación final por personas, sin reservas todavía en tránsito. |
 | `groups.state` | `preparing`, `waiting`, `traveling`, `safe`, `temporary` o `stranded`. `node` es el último nodo alcanzado y `edge` el tramo activo, si existe. |
@@ -135,6 +144,6 @@ Los siguientes valores ilustran el ejemplo mínimo. Los objetos no contienen inf
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -p 'test_motor_evacuacion.py' -v
 ```
 
-Las pruebas usan solamente `simulate`: conservación fraccionaria e historial, FIFO e integrales, cierres iniciales/durante tránsito/en igualdad, redirección, reservas y capacidades de destino, refugios, exposición persistente, transformación, horizonte, desconexión, repetibilidad, serialización JSON y validación sin mutaciones. Cubren S2.2 (masa y consumo de preparación externa), S2.3, S2.4 y S2.8. La generación aleatoria de hogares pertenece al integrador, no al motor.
+Las pruebas usan solamente `simulate`: conservación fraccionaria e historial, FIFO e integrales, cierres iniciales/durante tránsito/en igualdad, redirección, reservas y capacidades de destino, refugios, exposición persistente, transformación, horizonte, desconexión, repetibilidad, serialización JSON y validación sin mutaciones. Comparan todos los escalares, estados finales, llegadas ponderadas, destinos y máximos por arista entre modos; un caso de miles de eventos comprueba límites, conteos e interrupción posterior a las primeras 100 travesías. Cubren S2.2 (masa y consumo de preparación externa), S2.3, S2.4 y S2.8. La generación aleatoria de hogares pertenece al integrador, no al motor.
 
 **Risk:** la unidad contiene acople de eventos, reservas y rutas; requiere revisión independiente y pruebas integradas con la red y las 30 réplicas de fuego. No hay calibración de congestión, tiempos ni exposición contra evacuaciones históricas.

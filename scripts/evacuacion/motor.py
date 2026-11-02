@@ -100,7 +100,8 @@ def _validate(network, groups, fire, horizon, closed_edges):
     return nodes, edges, destinations, node_fire, edge_fire, origin_fire
 
 
-def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=None):
+def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=None,
+             retain_details=True):
     """Simular sin mutar entradas; ver docs/motor_evacuacion.md para el contrato."""
     try:
         nodes, edges, destinations, node_fire, edge_fire, origin_fire = _validate(
@@ -144,6 +145,22 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
     route_cache = {}
     event_batches = 0
     last_progress_min = None
+    history_records = traversal_records = 0
+    last_history_bucket = -1
+    last_snapshot_time = None
+    no_closed_edge_traversal = True
+    # Suma expansiva: mismo redondeo que fsum de los intervalos de la historia
+    # completa, sin retener un intervalo por evento.
+    queue_duration_partials = []
+
+    def end_traversal(g, outcome):
+        nonlocal no_closed_edge_traversal
+        record = g['traversal']
+        record.update(end_min=time, outcome=outcome)
+        valid = (time <= edge_fire[record['edge']] and
+                 record['edge'] not in (closed_edges or []))
+        no_closed_edge_traversal = no_closed_edge_traversal and valid
+        g['traversal'] = None
 
     def event(when, priority, kind, payload):
         nonlocal sequence
@@ -273,6 +290,7 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
         return None
 
     def dispatch():
+        nonlocal traversal_records
         # FIFO global entre cabeceras de colas; un tramo lleno no bloquea otros tramos.
         candidates = []
         for node in sorted(dirty):
@@ -321,13 +339,26 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
             peak[identifier] = max(peak[identifier], len(occupancy[identifier]))
             record = {'group': g['id'], 'edge': identifier, 'start_min': time,
                       'end_min': None, 'outcome': 'active'}
-            traversals.append(record)
+            traversal_records += 1
+            if retain_details or len(traversals) < 100:
+                traversals.append(record)
             g.update(state='traveling', edge=identifier, traversal=record)
             event(time + edge['travel_min'], 2, 'arrival', (index, record))
         if dirty:
             dispatch()
 
     def snapshot():
+        nonlocal history_records, last_history_bucket, last_snapshot_time
+        if time != last_snapshot_time:
+            history_records += 1
+            last_snapshot_time = time
+        # Primer evento real en cada franja del horizonte; ningún evento añadido.
+        bucket = 0 if horizon == 0 else (
+            480 if time == horizon else min(479, int((time / horizon) * 480)))
+        if (not retain_details and bucket == last_history_bucket and
+                history[-1]['time_min'] != time):
+            return
+        last_history_bucket = bucket
         sample = {'time_min': time, 'people_safe': safe_people, 'people_temporary': temporary_people,
                   'people_remaining': total - safe_people - temporary_people,
                   'people_exposed': exposed_people,
@@ -350,6 +381,19 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
         next_time = events[0][0]
         queue_group_minutes += queue_groups * (next_time - time)
         queue_person_minutes += max(0.0, queue_people) * (next_time - time)
+        if queue_groups > 0:
+            duration = next_time - time
+            i = 0
+            for partial in queue_duration_partials:
+                if abs(duration) < abs(partial):
+                    duration, partial = partial, duration
+                high = duration + partial
+                low = partial - (high - duration)
+                if low:
+                    queue_duration_partials[i] = low
+                    i += 1
+                duration = high
+            queue_duration_partials[i:] = [duration]
         time = next_time
         processing_events = True
         reservations_released = False
@@ -364,7 +408,7 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
                 for index in sorted(occupancy[identifier]):
                     g = states[index]
                     expose(g)
-                    g['traversal'].update(end_min=time, outcome='interrupted')
+                    end_traversal(g, 'interrupted')
                     g['edge'] = None
                     residents[g['node']].add(index)
                     release(g)
@@ -405,7 +449,7 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
                 occupancy[identifier].remove(index)
                 wake_edge(identifier)
                 dirty.add(edge['u'])
-                record.update(end_min=time, outcome='arrived')
+                end_traversal(g, 'arrived')
                 g.update(node=edge['v'], edge=None)
                 residents[g['node']].add(index)
                 if node_fire[g['node']] <= time:
@@ -440,7 +484,7 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
     # El horizonte trunca recorridos activos sin inventar una llegada.
     for g in states:
         if g['state'] == 'traveling':
-            g['traversal'].update(end_min=horizon, outcome='horizon')
+            end_traversal(g, 'horizon')
     result = dict(history[-1])
     result.pop('time_min')
     result.pop('queue_groups')
@@ -449,14 +493,23 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
                   people_safe_before_fire=math.fsum(g['people'] for g in states
                                                    if g['state'] == 'safe' and not g['exposed']),
                   queue_group_minutes=queue_group_minutes, queue_person_minutes=queue_person_minutes,
+                  queue_duration_min=math.fsum(queue_duration_partials),
                   max_queue_groups=max_queue_groups, max_queue_people=max_queue_people,
                   edge_max_occupancy=peak,
                   capacity_invariant=all(peak[e] <= edges[e]['capacity'] for e in edges),
-                  no_closed_edge_traversal=all(t['end_min'] <= edge_fire[t['edge']] and
-                                               t['edge'] not in (closed_edges or []) for t in traversals),
+                  no_closed_edge_traversal=no_closed_edge_traversal,
                   destination_people=arrived, history=history, traversals=traversals,
                   evacuation_times=evacuation_times,
                   groups=[{key: g[key] for key in ('id', 'people', 'node', 'state', 'edge',
                                                   'destination', 'finish_min', 'exposed')}
                           for g in states])
+    if not retain_details:
+        result['detail_retention'] = {
+            'mode': 'compact', 'history_records': history_records,
+            'traversal_records': traversal_records,
+            'history_limit': 481, 'traversal_limit': 100,
+            'history_selection': ('first actual event per 1/480 horizon interval, including '
+                                  'time zero and horizon; illustrative, not metric input'),
+            'traversal_selection': 'first 100 starts; active records kept until completion',
+        }
     return result
