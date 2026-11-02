@@ -3,6 +3,7 @@ import copy
 import csv
 import json
 import math
+import multiprocessing
 import os
 from pathlib import Path
 import subprocess
@@ -10,6 +11,8 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
+from concurrent.futures import Future
 
 import numpy as np
 from scipy.stats import t
@@ -58,6 +61,138 @@ class ExperimentTests(unittest.TestCase):
         command += ['--output', str(output), *extra]
         return subprocess.run(command, text=True, capture_output=True, cwd=output.parent,
                               env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'), timeout=60)
+
+    def test_workers_validation_before_any_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            paths = self.fixtures(folder)
+            output = folder / 'output'
+            for value in (0, 5, 1.5, True, '2'):
+                with self.subTest(api=value), self.assertRaisesRegex(
+                        ValueError, 'workers debe ser entero entre 1 y 4'):
+                    exp.run_experiments({**paths, 'output': output}, smoke=True,
+                                        replicas=1, workers=value)
+                self.assertFalse(output.exists())
+            output.mkdir()
+            sentinel = output / 'keep.txt'
+            sentinel.write_text('unchanged')
+            for value in ('0', '5', 'abc', '1.5'):
+                absent = folder / 'absent'
+                rejected = self.cli(paths, absent, '--workers', value)
+                self.assertEqual(rejected.returncode, 2)
+                self.assertEqual(rejected.stdout, '')
+                self.assertFalse(absent.exists())
+                result = self.cli(paths, output, '--workers', value)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, '')
+                self.assertEqual(result.stderr.splitlines()[-1],
+                                 'experimentos.py: error: argument --workers: workers debe ser entero entre 1 y 4')
+                self.assertEqual(list(output.iterdir()), [sentinel])
+                self.assertEqual(sentinel.read_text(), 'unchanged')
+
+    def test_spawn_matches_sequential_120_jobs_and_single_job(self):
+        self.fire[:, 0, 1] = np.arange(30) + 90
+        children = multiprocessing.active_children()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            paths = self.fixtures(folder)
+            sequential, parallel = folder / 'sequential', folder / 'parallel'
+            for output, workers in ((sequential, '1'), (parallel, '2')):
+                result = self.cli(paths, output, '--workers', workers)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f'phase=workers start workers={workers}', result.stdout)
+                self.assertIn(f'phase=workers done workers={workers}', result.stdout)
+            for name in ('replicas.csv', 'distribution.csv', 'example_replica.json'):
+                self.assertEqual((sequential / name).read_bytes(), (parallel / name).read_bytes())
+            left = json.loads((sequential / 'summary.json').read_text())
+            right = json.loads((parallel / 'summary.json').read_text())
+            self.assertEqual(left['metadata'].pop('worker_count'), 1)
+            self.assertEqual(right['metadata'].pop('worker_count'), 2)
+            self.assertEqual(left, right)
+            runs = left['metadata']['runs']
+            self.assertEqual([(r['replica'], r['scenario']) for r in runs],
+                             [(r, s) for r in range(30) for s in exp.SCENARIOS])
+            self.assertEqual([r['preparation_seed'] for r in runs],
+                             [2000 + r for r in range(30) for _ in exp.SCENARIOS])
+            single = self.cli(paths, folder / 'single', '--workers', '2', '--smoke',
+                              '--replicas', '1', '--scenario', 'base')
+            self.assertEqual(single.returncode, 0, single.stderr)
+        self.assertEqual(multiprocessing.active_children(), children)
+
+    def test_bounded_pool_failure_cancellation_and_interrupt(self):
+        # No public failure flag: exercise scheduler failures without changing fixtures mid-run.
+        for failure in (RuntimeError('synthetic failure'), KeyboardInterrupt()):
+            with self.subTest(failure=type(failure).__name__), patch.object(
+                    exp, 'ProcessPoolExecutor') as executor:
+                futures = []
+
+                def submit(fn, job):
+                    future = Future()
+                    if not futures:
+                        future.set_exception(failure)
+                    futures.append(future)
+                    return future
+
+                pool = executor.return_value
+                pool.submit.side_effect = submit
+                deliveries = exp._ordered_jobs(None, iter((r, 'base') for r in range(120)), 2)
+                if isinstance(failure, Exception):
+                    with self.assertRaisesRegex(RuntimeError, 'scenario=base r=0.*synthetic failure'):
+                        next(deliveries)
+                else:
+                    with self.assertRaises(KeyboardInterrupt):
+                        next(deliveries)
+                self.assertEqual(len(futures), 4)
+                self.assertTrue(all(f.cancelled() for f in futures[1:]))
+                pool.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+                self.assertEqual(executor.call_args.kwargs['mp_context'].get_start_method(), 'spawn')
+                self.assertEqual(executor.call_args.kwargs['max_workers'], 2)
+
+    def test_out_of_order_failure_stops_refill(self):
+        with patch.object(exp, 'ProcessPoolExecutor') as executor:
+            futures = [Future() for _ in range(4)]
+            futures[0].set_result('first')
+            futures[1].set_exception(ValueError('later failure'))
+            pool = executor.return_value
+            pool.submit.side_effect = futures
+            deliveries = exp._ordered_jobs(None, iter((r, 'base') for r in range(120)), 2)
+            self.assertEqual(next(deliveries), 'first')
+            with self.assertRaisesRegex(RuntimeError, 'scenario=base r=1.*later failure'):
+                next(deliveries)
+            self.assertEqual(pool.submit.call_count, 4)
+            self.assertTrue(all(f.cancelled() for f in futures[2:]))
+            pool.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+
+    def test_delivery_validation_keeps_all_invariants(self):
+        network = exp.prepare_network(self.network, self.contract)
+        inputs = (network, self.population, self.fire, self.seeds, self.contract,
+                  self.config, True, 'base')
+        delivery = exp._simulation_job(inputs, (0, 'base'))
+        total = math.fsum(self.population.flat)
+        exp._validate_delivery(delivery, total)
+        for key, value in [('capacity_invariant', False), ('no_closed_edge_traversal', False)]:
+            with self.subTest(invariant=key), self.assertRaises(ValueError):
+                exp._validate_delivery({**delivery, key: value}, total)
+        for key, value in [('people_total', total + 1), ('people_remaining', 1),
+                           ('people_exposed', total + 1), ('queue_duration_min', math.nan),
+                           ('evacuation_mean_min', 0), ('safe_arrival_people', 0)]:
+            corrupted = {**delivery, 'metrics': {**delivery['metrics'], key: value}}
+            with self.subTest(metric=key), self.assertRaises(ValueError):
+                exp._validate_delivery(corrupted, total)
+        corrupted = {**delivery, 'arrivals': [{'time_min': math.inf, 'people': 1}]}
+        with self.assertRaises(ValueError):
+            exp._validate_delivery(corrupted, total)
+        for workers in (1, 2, 3, 4):
+            self.assertEqual(exp._validate_workers(workers), workers)
+
+    def test_spawn_worker_failure_is_joined_and_contextual(self):
+        children = multiprocessing.active_children()
+        network = exp.prepare_network(self.network, self.contract)
+        inputs = (network, self.population, self.fire, self.seeds, self.contract,
+                  self.config, True, 'base')
+        with self.assertRaisesRegex(RuntimeError, 'scenario=invalid r=0'):
+            list(exp._ordered_jobs(inputs, iter([(0, 'invalid'), (0, 'base')]), 2))
+        self.assertEqual(multiprocessing.active_children(), children)
 
     def test_adapter_mass_remainders_connectivity_and_repeatability(self):
         original = copy.deepcopy(self.network)
@@ -421,7 +556,7 @@ class ExperimentTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(ROOT / 'scripts/evacuacion/experimentos.py'), '--help'],
                                 capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0)
-        for flag in (*exp.DEFAULTS, 'replicas', 'smoke', 'scenario'):
+        for flag in (*exp.DEFAULTS, 'replicas', 'smoke', 'scenario', 'workers'):
             self.assertIn('--' + flag, result.stdout)
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
