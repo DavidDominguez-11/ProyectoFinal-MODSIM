@@ -105,6 +105,14 @@ Se retiene una sola salida completa del motor en memoria por vez y un solo ejemp
 
 El motor cachea rutas multifuente, pero las reservas, cierres y cambios de destinos factibles pueden invalidar cachés. No hay garantía de tiempo/memoria del lote real hasta medirlo; no sustituir población por una muestra para esconder un problema de rendimiento. Si la prueba real es lenta, registrar el tiempo y evaluar el motor en una unidad separada, sin cambiar silenciosamente semántica.
 
+## Comprobación geográfica preliminar
+
+La prueba `--smoke --replicas 1 --scenario base` con exportación acotada terminó con código 0 y `REAL_SMOKE_CHECK_PASS`. Se conservaron **42388,94983696542 personas ponderadas** en **50314 grupos**, sin violaciones de capacidad ni tránsito por vías cerradas; se generaron las tres figuras. De esa población, 94,98908536263116 personas (0,224089 %) quedan asignadas a componentes sin salida antes de considerar el fuego. No se eliminaron de los denominadores.
+
+La corrida tardó 434,51 s (aproximadamente 7 min 15 s); la simulación consumió 419,67 s. `/usr/bin/time -l` registró 7795638272 bytes de RSS máximo y 13745613048 bytes de huella máxima de memoria en macOS. El ejemplo representativo ocupó 214095 bytes y todos los productos de esta prueba, 1684830 bytes. La exportación anterior sin límites se interrumpió por crecimiento excesivo; el archivo parcial de 9,84 GB se eliminó con autorización. Las métricas de la nueva corrida coinciden con la fila provisional anterior.
+
+**Esto verifica una sola réplica; no sustituye las 30 por escenario ni permite concluir cuál intervención es mejor.** El lote completo de 120 corridas está en ejecución secuencial. Una extrapolación de la base da unas 14–15 horas; los otros escenarios pueden costar distinto. No paralelizar sin evaluar primero la memoria disponible. Los resultados finales y sus IC quedan pendientes del código de salida y de la revisión del lote completo.
+
 ## Verificación automatizada
 
 ```sh
