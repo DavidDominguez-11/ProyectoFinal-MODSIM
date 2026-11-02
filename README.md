@@ -16,7 +16,7 @@ Proyecto final de Modelación y Simulación: simulación híbrida de propagació
 
 ## Estado
 
-El módulo de fuego tiene calibración, validación y sensibilidad documentadas. La evacuación integra población residencial y carreteras reales con parámetros de respuesta **hipotéticos**; no es una reconstrucción histórica ni una predicción de seguridad. Las pruebas automáticas pasan; la medición geográfica y los experimentos están en ejecución. Los documentos del avance parcial conservan el estado de aquella entrega.
+El módulo de fuego tiene calibración, validación y sensibilidad documentadas. La evacuación integra población residencial y carreteras reales con parámetros de respuesta **hipotéticos**; no es una reconstrucción histórica ni una predicción de seguridad. Las 53 pruebas automáticas y una réplica geográfica completa pasan; el lote de 120 experimentos está en ejecución secuencial. La prueba real tardó unos 7 min 15 s y llegó a 7,8 GB de RSS: reservá tiempo y memoria, y no confundas una prueba `--smoke` con resultados finales. Los documentos del avance parcial conservan el estado de aquella entrega.
 
 - [Evacuación: modelo, supuestos, métricas y escenarios](docs/modelo_evacuacion.md)
 - [Construcción y auditoría de la red vial](docs/red_vial.md)
