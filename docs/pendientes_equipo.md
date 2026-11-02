@@ -1,14 +1,14 @@
 # Pendientes del equipo: qué le toca a cada quien
 
-**Actualizado:** 29 de octubre de 2026
-**Entrega final en Canvas:** 2 de noviembre de 2026
+**Actualizado:** 2 de noviembre de 2026
+**Entrega final en Canvas:** 2 de noviembre de 2026, 23:59 CST
 
 El trabajo está dividido en tres partes. Cada persona termina la suya completa, sin mezclar tareas con las demás. Las partes se conectan por archivos acordados (ver "Qué se entregan entre partes").
 
 | Parte | Responsable | Estado |
 |---|---|---|
 | 1. Datos reales y modelo del fuego | Persona 1 | ✅ Terminada |
-| 2. Evacuación, red vial y experimentos | Persona 2 | ⏳ Red y motor implementados; 63 pruebas y verificación independiente pasan; nuevo lote de 120 corridas en marcha con cuatro procesos |
+| 2. Evacuación, red vial y experimentos | Persona 2 | ✅ Implementación y experimentos comparativos completos bajo supuestos explícitos; no validación histórica de evacuación |
 | 3. Evidencia del caso y entregables | Persona 3 | ⏳ Pendiente |
 
 ---
@@ -25,11 +25,17 @@ Ya existe el modelo del fuego del Camp Fire. Cubre de las 06:25 a las 14:25 del 
 
 ## Parte 2: evacuación, red vial y experimentos
 
-**Avance de implementación:** red TIGER dirigida, grupos ponderados, motor por eventos y escenarios pareados implementados. La documentación y los comandos están en [modelo_evacuacion.md](modelo_evacuacion.md). Se aprobaron 63 pruebas automáticas, la verificación independiente de concurrencia/entorno y dos réplicas base reales en paralelo; faltan terminar y revisar el nuevo lote de 120 corridas con cuatro procesos y sus resultados. Los parámetros de respuesta son supuestos explícitos mientras llega la evidencia de la Parte 3; no hay validación histórica de evacuación.
+**Completada en implementación y experimentos comparativos, bajo supuestos explícitos.** Red TIGER dirigida, grupos ponderados, motor por eventos y cuatro escenarios de un solo factor implementados. Terminaron **120 corridas (30 por escenario)** en cuatro procesos, 480 min de horizonte, con fuegos distintos de semillas 1000–1029 y preparación 2000–2029 pareada. Se conservaron 50314 grupos / 42388.94983696542 personas ponderadas. Producción: código 0, `FULL_PARALLEL_120_REPLICA_CHECK_PASS`, 17849.23 s (4 h 57 min 29 s). Pasaron 63 pruebas y la verificación independiente de código/concurrencia y entorno. El lote secuencial detenido anterior se conserva como evidencia parcial, no se mezcla con la producción final.
+
+**Evidencia de aceptación:** [solución, arquitectura, métodos, resultados e IC para el informe](modelo_evacuacion.md), [120 filas por réplica](../salidas/evacuacion_final/replicas.csv), [resumen y efectos pareados](../salidas/evacuacion_final/summary.json), [métricas](../salidas/evacuacion_final/metrics.png), [CDF condicional](../salidas/evacuacion_final/cdf.png) y [colas](../salidas/evacuacion_final/queues.png). El orquestador recomputó medias/IC marginales y pareados desde el CSV, comprobó los cinco hashes de entrada y revisó visualmente las tres figuras. La distribución exacta regenerable también aprobó controles de pesos, orden, CDF y masa; no se versiona por su tamaño.
+
+**Alcance:** los avisos, cierres y capacidades usados provienen de configuración hipotética, no de políticas históricas reconstruidas. La calibración del fuego no valida la evacuación. Alerta temprana: ~+3.18 pp de fracción segura antes del fuego; cierre de Skyway: ~−22.09 pp; más capacidad en una salida: ~−1.61 pp. Este último mecanismo requiere diagnóstico, no una recomendación de política. La Parte 3 aún debe aportar evidencia histórica e integrar los entregables finales; **no está terminado todo el proyecto**.
 
 **Objetivo:** simular cómo evacúan las personas por las carreteras mientras avanza el fuego, y comparar escenarios.
 
-### Tareas
+### Tareas (lista original de aceptación)
+
+La lista se conserva como contrato de alcance; la evidencia de implementación, pruebas, métricas/gráficas (punto 7) y redacción (punto 9) está enlazada arriba. Su cumplimiento técnico no sustituye la evidencia histórica pendiente.
 
 1. **Red vial.**
    - Convertir las carreteras TIGER/Line 2018 de Butte County en un grafo dirigido. El enlace ya está en [scripts/auditar_geografia.py](../scripts/auditar_geografia.py).
@@ -121,7 +127,7 @@ El prototipo sintético [scripts/prototipo_hibrido.py](../scripts/prototipo_hibr
 | Parte 1 | Parte 2 | Llegada del fuego por réplica y población por celda | ✅ Listo |
 | Parte 3 | Parte 2 | Tabla de avisos, cierres y refugios con fuentes | 30 de octubre |
 | Parte 3 | Partes 1 y 2 | Plantilla del informe | 30 de octubre |
-| Parte 2 | Parte 3 | Resultados, gráficas y su sección del informe | 1 de noviembre |
+| Parte 2 | Parte 3 | Resultados, gráficas y su sección del informe | ✅ Disponibles el 2 de noviembre; integrar al PDF |
 | Todas | Todas | Revisión final y ensayo de la presentación | 2 de noviembre |
 
 ## Calendario
