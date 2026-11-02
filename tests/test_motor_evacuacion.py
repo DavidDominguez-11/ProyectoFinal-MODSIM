@@ -1,6 +1,7 @@
 """Pruebas de comportamiento del motor independiente, sin datos históricos."""
 import copy
 import json
+import math
 import unittest
 
 from scripts.evacuacion.motor import simulate
@@ -23,6 +24,95 @@ def group(identifier='g', people=2.5, ready=0):
 
 
 class MotorTests(unittest.TestCase):
+    def test_compact_equivalence_for_existing_public_behavior_cases(self):
+        # Reutilizar las mismas entradas y aserciones de física, no otro motor de prueba.
+        cases = [name for name in dir(self) if name.startswith('test_') and
+                 not name.startswith('test_compact') and
+                 name != 'test_invalid_inputs_are_rejected_without_mutation']
+        original = self.run_model
+
+        def compare(*args, **kwargs):
+            full_reports, compact_reports = [], []
+            full = original(*args, **kwargs, progress=full_reports.append)
+            compact = original(*args, **kwargs, retain_details=False,
+                               progress=compact_reports.append)
+            self.assertEqual(full_reports, compact_reports)
+            for key in full:
+                if key not in ('history', 'traversals', 'detail_retention'):
+                    self.assertEqual(full[key], compact[key], key)
+            self.assertEqual(compact['detail_retention']['history_records'], len(full['history']))
+            self.assertEqual(compact['detail_retention']['traversal_records'], len(full['traversals']))
+            self.assertEqual(compact['traversals'], full['traversals'][:100])
+            self.assertEqual(compact['history'][0], full['history'][0])
+            self.assertEqual(compact['history'][-1], full['history'][-1])
+            self.assertLessEqual(len(compact['history']), 481)
+            self.assert_mass(compact)
+            return full
+
+        self.run_model = compare
+        try:
+            for name in cases:
+                # Este caso proporciona su propio progress para probar la API predeterminada.
+                if name == 'test_progress_is_ordered_reaches_horizon_and_preserves_result_bytes':
+                    continue
+                with self.subTest(behavior=name):
+                    getattr(self, name)()
+        finally:
+            self.run_model = original
+
+    def test_compact_subminute_queue_duration_and_progress_independent_of_samples(self):
+        groups = [group(f'{i}-{j}', .125, ready=i * .01)
+                  for i in range(200) for j in range(2)]
+        for horizon in (0, .0005, 480):
+            with self.subTest(horizon=horizon):
+                reports, compact_reports = [], []
+                full = self.run_model(network(travel=.001), groups, horizon=horizon,
+                                      progress=reports.append, retain_details=True)
+                self.assertEqual(full, self.run_model(network(travel=.001), groups,
+                                                     horizon=horizon))
+                compact = self.run_model(network(travel=.001), groups, horizon=horizon,
+                                         progress=compact_reports.append, retain_details=False)
+                self.assertEqual(reports, compact_reports)
+                duration = math.fsum(b['time_min'] - a['time_min']
+                                     for a, b in zip(full['history'], full['history'][1:])
+                                     if a['queue_groups'] > 0)
+                self.assertEqual(compact['queue_duration_min'], duration)
+                self.assertEqual(compact['evacuation_times'], full['evacuation_times'])
+                self.assertEqual(compact['groups'], full['groups'])
+                if horizon == 480:
+                    sampled_duration = math.fsum(
+                        b['time_min'] - a['time_min'] for a, b in
+                        zip(compact['history'], compact['history'][1:]) if a['queue_groups'] > 0)
+                    self.assertNotEqual(sampled_duration, compact['queue_duration_min'])
+
+    def test_compact_many_actual_events_counts_and_late_interruption(self):
+        net = network(travel=.001, destination_capacity=10000)
+        net['edges'][0]['cells'] = [[0, 2]]
+        groups = [group(str(i), .125) for i in range(4000)]
+        full = self.run_model(net, groups, fire=[[-1, -1, 3.9995]], horizon=4.5)
+        compact = self.run_model(net, groups, fire=[[-1, -1, 3.9995]], horizon=4.5,
+                                 retain_details=False)
+        for key in full:
+            if key not in ('history', 'traversals', 'detail_retention'):
+                self.assertEqual(full[key], compact[key], key)
+        self.assertGreater(len(full['history']), 3900)
+        self.assertGreater(len(full['traversals']), 3900)
+        self.assertEqual(full['traversals'][-1]['outcome'], 'interrupted')
+        self.assertLessEqual(len(compact['history']), 481)
+        self.assertEqual(len(compact['traversals']), 100)
+        self.assertEqual(compact['detail_retention']['history_records'], len(full['history']))
+        self.assertEqual(compact['detail_retention']['traversal_records'], len(full['traversals']))
+        self.assertEqual([s['time_min'] for s in compact['history']],
+                         sorted({s['time_min'] for s in compact['history']}))
+        self.assertEqual(compact['history'][0], full['history'][0])
+        self.assertEqual(compact['history'][-1], full['history'][-1])
+        self.assertTrue(compact['capacity_invariant'])
+        self.assertTrue(compact['no_closed_edge_traversal'])
+        # Auditar todos los recorridos originales, no solamente los primeros 100.
+        self.assertTrue(all(t['end_min'] <= 3.9995 for t in full['traversals']))
+        self.assertEqual(compact['people_exposed'], .125)
+        self.assert_mass(compact)
+
     def run_model(self, net=None, groups=None, fire=None, **kwargs):
         return simulate(net or network(), groups if groups is not None else [group()],
                         fire if fire is not None else [[-1, -1]], **kwargs)

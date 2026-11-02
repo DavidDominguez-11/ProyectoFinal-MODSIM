@@ -7,7 +7,7 @@
 Primero medir una sola corrida real; luego comparar las 120 corridas. Usar directorios nuevos o vacíos para no mezclar evidencia:
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" .venv/bin/python scripts/evacuacion/experimentos.py --smoke --replicas 1 --scenario base --output salidas/evacuacion_smoke_base
+PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" .venv/bin/python scripts/evacuacion/experimentos.py --smoke --replicas 1 --scenario base --output salidas/evacuacion_smoke_compact
 PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" .venv/bin/python scripts/evacuacion/experimentos.py --replicas 30 --output salidas/evacuacion
 ```
 
@@ -53,7 +53,7 @@ Las rutas predeterminadas son relativas a la raíz del proyecto, independienteme
 
 ## Arquitectura y API
 
-El integrador importa únicamente `motor.simulate` como contrato público del motor. Lee el JSON generado por `red_vial.build_network` sin alterar ese constructor ni duplicar enrutamiento, colas, reservas, cierres o exposición. El motor valida la red durante el preflight mediante una llamada pública sin grupos, sin fuego observado y horizonte cero.
+El integrador importa únicamente `motor.simulate` como contrato público del motor. Lee el JSON generado por `red_vial.build_network` sin alterar ese constructor ni duplicar enrutamiento, colas, reservas, cierres o exposición. El motor valida la red durante el preflight mediante una llamada pública sin grupos, sin fuego observado y horizonte cero. Las corridas usan `simulate(..., retain_details=False)` sin opción CLI nueva: solo limita la retención de detalles, no la simulación. La API del motor conserva el modo completo por defecto.
 
 | Callable | Resultado / responsabilidad |
 |---|---|
@@ -62,7 +62,7 @@ El integrador importa únicamente `motor.simulate` como contrato público del mo
 | `scenario_inputs(network, groups, config, scenario)` | `(network_copy, groups_copy, closed_edges, intervention)` |
 | `load_inputs(paths, replicas, smoke)` | Preflight sin escrituras; retorna entradas, resumen de acceso y hashes |
 | `evacuation_statistics(arrivals)` | Media y percentiles ponderados, conteo de grupos y masa segura |
-| `queue_duration(history)` | Integral del indicador de cola no vacía en minutos |
+| `queue_duration(history)` | Compatibilidad con historias públicas completas anteriores; nunca integrar muestras compactas |
 | `confidence_interval(values)` | `{n, mean, ci95}`; excluye `None`; IC nulo cuando n<2 |
 | `summarize_replica(result)` | Métricas compactas y comprobaciones de invariantes del motor |
 | `run_experiments(paths, replicas=30, smoke=False, scenarios=None)` | Ejecuta secuencialmente, escribe productos y retorna resumen |
@@ -82,15 +82,15 @@ El integrador importa únicamente `motor.simulate` como contrato público del mo
 | `metrics.png` | Fracción segura antes del fuego y exposición: media e IC t 95% |
 | `queues.png` | Integrales, máximos y duración de colas, más tiempo medio de llegada segura: medias e IC t 95% |
 
-El ejemplo usa `schema: evacuation_representative_example`, `version: 1`, `representative: true`, descripción y metadatos `run`. `metrics` conserva todas las métricas de la corrida completa. `result` conserva los escalares del motor (incluidos invariantes), pero solo los primeros 100 `groups` y `traversals`; `input_groups` contiene los primeros 100 grupos de entrada. `history` selecciona como máximo 481 índices uniformemente espaciados (`floor(i*(N-1)/(K-1))`), incluidos primero y último; para N=1 exporta ese único registro. Es muestreo de registros, no interpolación a minutos uniformes.
+El ejemplo usa `schema: evacuation_representative_example`, `version: 1`, `representative: true`, descripción y metadatos `run`. `metrics` conserva todas las métricas de la corrida completa. `result` conserva los escalares del motor (incluidos invariantes), pero solo los primeros 100 `groups` y `traversals`; `input_groups` contiene los primeros 100 grupos de entrada. `history` contiene como máximo 481 muestras: el primer evento real de cada franja de 1/480 del horizonte, más el horizonte, incluidos cero y horizonte sin duplicados. Son detalles representativos, no interpolación ni fuente de métricas. La proyección de un resultado público completo conserva el criterio anterior de índices uniformemente espaciados (`floor(i*(N-1)/(K-1))`).
 
-`record_counts`, `exported_counts`, `truncated` y `selection` explicitan para cada colección su tamaño total, exportado, truncamiento y criterio. `evacuation_times`, `edge_max_occupancy` y `destination_people` se omiten completamente del ejemplo: solo sus conteos y los totales/invariantes escalares permanecen. Las llegadas exactas siguen en `distribution.csv`. Ningún muestreo ilustrativo altera población, dinámica, estadísticas o productos exactos; la cantidad exportada no crece con eventos, grupos, tramos o travesías.
+`record_counts`, `exported_counts`, `truncated` y `selection` explicitan para cada colección su tamaño original exacto, exportado, truncamiento y criterio. En modo compacto los conteos de historia y travesías provienen de contadores de todos los lotes/inicios, no de la longitud retenida. `evacuation_times`, `edge_max_occupancy` y `destination_people` se omiten completamente del ejemplo: solo sus conteos y los totales/invariantes escalares permanecen. Las llegadas exactas siguen en `distribution.csv`. Ningún muestreo ilustrativo altera población, dinámica, estadísticas o productos exactos; la cantidad exportada no crece con eventos, grupos, tramos o travesías.
 
 Métricas por réplica:
 
 - `people_total`, `people_safe`, `people_safe_before_fire`, `people_exposed`, `people_temporary`, `people_remaining`: personas ponderadas. Exposición es un subconjunto transversal, no una categoría adicional de conservación.
 - `fraction_safe_before_fire`: denominador toda la masa inicial, incluidos orígenes desconectados.
-- `queue_group_minutes`, `queue_person_minutes`: integrales del motor (grupos·min y personas·min), no suma de eventos. `max_queue_groups`, `max_queue_people`: máximos simultáneos. `queue_duration_min`: integral de intervalos históricos con cola no vacía; incluye espera sin ruta y excluye preparación/tránsito.
+- `queue_group_minutes`, `queue_person_minutes`: integrales del motor (grupos·min y personas·min), no suma de eventos. `max_queue_groups`, `max_queue_people`: máximos simultáneos. `queue_duration_min`: integral exacta en línea del indicador de cola no vacía antes de cada lote real; incluye espera sin ruta y excluye preparación/tránsito. `summarize_replica` usa este escalar autoritativo, nunca la historia ilustrativa; solo acepta historia completa como compatibilidad para resultados antiguos sin el escalar.
 - `evacuation_mean_min`, `evacuation_p50_min`, `evacuation_p90_min`: distribución ponderada **condicional a llegadas seguras**, minutos desde ignición. Percentil por inversa de CDF discreta (primer tiempo con peso acumulado suficiente). `safe_arrival_count` cuenta grupos y `safe_arrival_people` su masa. Sin llegadas, los tres tiempos son `null`, nunca cero.
 
 Cada IC usa estadísticas de réplicas independientes, error estándar muestral y cuantil Student-t bilateral 95% con n−1 grados de libertad. No se tratan hogares como réplicas independientes. Las diferencias pareadas se calculan alternativa menos base, por el mismo índice de fuego/preparación; valores nulos se excluyen por pareja. Se informa n efectivo por métrica. Una sola réplica tiene media pero no IC. El IC no se recorta artificialmente a [0,1]. La CDF agrupada pondera personas seguras, no sustituye el promedio por réplica ni su IC.
@@ -101,7 +101,7 @@ Cada IC usa estadísticas de réplicas independientes, error estándar muestral 
 
 El grafo disponible al integrar tiene 31670 nodos, 64098 aristas dirigidas, seis salidas y 18 componentes; 935 nodos no tienen salida. La grilla es 205×278 con 40542 celdas positivas; el archivo contiene 30 fuegos con semillas 1000–1029. Estas dimensiones son evidencia de entradas, **no resultados de las 120 corridas**. Los totales precisos de habitantes y su inaccesibilidad se calculan desde los archivos y se publican en cada ejecución, no se copian de resúmenes redondeados.
 
-Se retiene una sola salida completa del motor en memoria por vez y un solo ejemplo representativo acotado en disco. Las llegadas exactas se transmiten a CSV por réplica; entre corridas solo quedan estadísticas escalares y histogramas gráficos acotados. El motor todavía retiene historia y trayectorias completas **dentro** de una corrida. El CSV de distribución puede ser grande; el ejemplo no exporta historias ni trayectorias completas. Ninguno es necesario para volver a calcular las medias/IC desde `replicas.csv`. La CDF gráfica agrupa tiempos en intervalos, pero conserva pesos; esto es una resolución visual, no muestreo ni aproximación de la simulación.
+Se retiene una sola salida compacta del motor en memoria por vez y un solo ejemplo representativo acotado en disco. Las llegadas exactas se transmiten a CSV por réplica; entre corridas solo quedan estadísticas escalares y histogramas gráficos acotados. Dentro de una corrida se retienen hasta 481 muestras de historia, primeras 100 travesías y registros activos hasta terminar, sin colecciones ocultas de detalles completados. Se conservan todos los estados finales, llegadas ponderadas y mapas de máximos/destinos. Los invariantes cubren **cada** travesía real, no solo la muestra. `metadata.detail_recording` documenta estos límites de registro; no describe cambios del modelo. El CSV de distribución puede ser grande; el ejemplo no exporta historias ni trayectorias completas. Ninguno es necesario para volver a calcular las medias/IC desde `replicas.csv`. La CDF gráfica agrupa tiempos en intervalos, pero conserva pesos; esto es una resolución visual, no muestreo ni aproximación de la simulación.
 
 El motor cachea rutas multifuente, pero las reservas, cierres y cambios de destinos factibles pueden invalidar cachés. No hay garantía de tiempo/memoria del lote real hasta medirlo; no sustituir población por una muestra para esconder un problema de rendimiento. Si la prueba real es lenta, registrar el tiempo y evaluar el motor en una unidad separada, sin cambiar silenciosamente semántica.
 
@@ -109,9 +109,11 @@ El motor cachea rutas multifuente, pero las reservas, cierres y cambios de desti
 
 La prueba `--smoke --replicas 1 --scenario base` con exportación acotada terminó con código 0 y `REAL_SMOKE_CHECK_PASS`. Se conservaron **42388,94983696542 personas ponderadas** en **50314 grupos**, sin violaciones de capacidad ni tránsito por vías cerradas; se generaron las tres figuras. De esa población, 94,98908536263116 personas (0,224089 %) quedan asignadas a componentes sin salida antes de considerar el fuego. No se eliminaron de los denominadores.
 
-La corrida tardó 434,51 s (aproximadamente 7 min 15 s); la simulación consumió 419,67 s. `/usr/bin/time -l` registró 7795638272 bytes de RSS máximo y 13745613048 bytes de huella máxima de memoria en macOS. El ejemplo representativo ocupó 214095 bytes y todos los productos de esta prueba, 1684830 bytes. La exportación anterior sin límites se interrumpió por crecimiento excesivo; el archivo parcial de 9,84 GB se eliminó con autorización. Las métricas de la nueva corrida coinciden con la fila provisional anterior.
+La corrida anterior, con retención completa dentro del motor, tardó 434,51 s (aproximadamente 7 min 15 s); la simulación consumió 419,67 s. `/usr/bin/time -l` registró 7795638272 bytes de RSS máximo y 13745613048 bytes de huella máxima de memoria en macOS. El ejemplo representativo ocupó 214095 bytes y todos los productos de esta prueba, 1684830 bytes. La exportación anterior sin límites se interrumpió por crecimiento excesivo; el archivo parcial de 9,84 GB se eliminó con autorización. Las métricas de la nueva corrida coinciden con la fila provisional anterior.
 
-**Esto verifica una sola réplica; no sustituye las 30 por escenario ni permite concluir cuál intervención es mejor.** El lote completo de 120 corridas está en ejecución secuencial. Una extrapolación de la base da unas 14–15 horas; los otros escenarios pueden costar distinto. No paralelizar sin evaluar primero la memoria disponible. Los resultados finales y sus IC quedan pendientes del código de salida y de la revisión del lote completo.
+El modo compacto todavía necesita una nueva medición real en un directorio nuevo (`salidas/evacuacion_smoke_compact`). La reducción de detalles retenidos no garantiza un tiempo objetivo ni convierte la prueba anterior en evidencia del nuevo rendimiento.
+
+**Esto verifica una sola réplica; no sustituye las 30 por escenario ni permite concluir cuál intervención es mejor.** El lote completo de 120 corridas se detuvo por exceder el tiempo disponible; conserva resultados parciales, pero no cumple todavía las 30 réplicas por escenario. Una extrapolación de la base da unas 14–15 horas; los otros escenarios pueden costar distinto. No paralelizar sin evaluar primero la memoria disponible. Los resultados finales y sus IC quedan pendientes del código de salida y de la revisión del lote completo.
 
 ## Verificación automatizada
 

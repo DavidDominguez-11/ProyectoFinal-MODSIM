@@ -178,6 +178,31 @@ class ExperimentTests(unittest.TestCase):
         self.assertIsNone(empty['evacuation_p50_min'])
         self.assertIsNone(empty['evacuation_p90_min'])
 
+    def test_compact_seeded_four_scenarios_exact_products_and_duration(self):
+        network = exp.prepare_network(self.network, self.contract)
+        groups, _ = exp.make_groups(self.population, network, self.contract, self.config, 2000)
+        for scenario in exp.SCENARIOS:
+            adapted, prepared, closed, _ = exp.scenario_inputs(network, groups, self.config, scenario)
+            with self.subTest(scenario=scenario):
+                full = exp.simulate(adapted, prepared, self.fire[0].tolist(), 480, closed)
+                compact = exp.simulate(adapted, prepared, self.fire[0].tolist(), 480, closed,
+                                       retain_details=False)
+                self.assertEqual(exp.summarize_replica(full), exp.summarize_replica(compact))
+                self.assertEqual(full['evacuation_times'], compact['evacuation_times'])
+                self.assertEqual(full['groups'], compact['groups'])
+                self.assertEqual(full['destination_people'], compact['destination_people'])
+                self.assertEqual(full['edge_max_occupancy'], compact['edge_max_occupancy'])
+                self.assertEqual(full['queue_duration_min'], exp.queue_duration(full['history']))
+                authoritative = compact['queue_duration_min']
+                compact['history'] = []  # No dependencia oculta de muestras ilustrativas.
+                self.assertEqual(exp.summarize_replica(compact)['queue_duration_min'], authoritative)
+                compact.pop('queue_duration_min')
+                with self.assertRaisesRegex(ValueError, 'duración exacta'):
+                    exp.summarize_replica(compact)
+                legacy = dict(full)
+                legacy.pop('queue_duration_min')
+                self.assertEqual(exp.summarize_replica(legacy), exp.summarize_replica(full))
+
     def test_statistics_weighting_null_and_queue_intervals(self):
         stat = exp.confidence_interval([1, 2, 3])
         margin = float(t.ppf(.975, 2)) / math.sqrt(3)
@@ -264,9 +289,22 @@ class ExperimentTests(unittest.TestCase):
                     distribution = list(csv.DictReader(stream))
                 with (output / 'replicas.csv').open() as stream:
                     replicas = list(csv.DictReader(stream))
+                network = exp.prepare_network(self.network, self.contract)
+                groups, _ = exp.make_groups(self.population, network, self.contract, self.config, 2000)
                 for row in replicas:
-                    mass = math.fsum(float(d['people']) for d in distribution
-                                     if d['scenario'] == row['scenario'])
+                    scenario = row['scenario']
+                    adapted, prepared, closed, _ = exp.scenario_inputs(
+                        network, groups, self.config, scenario)
+                    full = exp.simulate(adapted, prepared, self.fire[0].tolist(), 480, closed)
+                    for key, value in exp.summarize_replica(full).items():
+                        self.assertEqual(float(row[key]) if row[key] else None, value, key)
+                        self.assertEqual(summary['scenarios'][scenario][key]['mean'], value)
+                    observed = [(float(d['time_min']), float(d['people'])) for d in distribution
+                                if d['scenario'] == scenario]
+                    expected = [(a['time_min'], a['people']) for a in
+                                sorted(full['evacuation_times'], key=lambda a: a['time_min'])]
+                    self.assertEqual(observed, expected)
+                    mass = math.fsum(people for _, people in observed)
                     self.assertAlmostEqual(mass, float(row['people_safe']))
                 for name in ['evacuation_mean_min', 'evacuation_p50_min', 'evacuation_p90_min']:
                     self.assertIsNone(summary['scenarios']['skyway_closed'][name]['mean'])
@@ -309,8 +347,15 @@ class ExperimentTests(unittest.TestCase):
                 self.assertEqual(example['result'][key], full[key][:100])
             self.assertGreater(len(full['history']), 481)
             history = example['result']['history']
+            compact = exp.simulate(adapted, prepared, self.fire[0].tolist(), 480, closed,
+                                   retain_details=False)
+            self.assertEqual(history, compact['history'])
+            self.assertIn('actual event', example['selection']['history'])
+            # La proyección pública de resultados completos conserva la selección previa.
+            legacy_example = exp.representative_example({}, prepared, full, metrics)
             indices = [i * (len(full['history']) - 1) // 480 for i in range(481)]
-            self.assertEqual(history, [full['history'][i] for i in indices])
+            self.assertEqual(legacy_example['result']['history'],
+                             [full['history'][i] for i in indices])
             self.assertEqual(history[0], full['history'][0])
             self.assertEqual(history[-1], full['history'][-1])
             records = {'input_groups': prepared, **{k: full[k] for k in
