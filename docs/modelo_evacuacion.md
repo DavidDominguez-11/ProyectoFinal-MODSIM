@@ -11,7 +11,7 @@ PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" .venv/bin/python
 PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR="$PWD/.cache/matplotlib" .venv/bin/python scripts/evacuacion/experimentos.py --replicas 30 --output salidas/evacuacion
 ```
 
-Para comprobar los cuatro escenarios con una réplica: `--smoke --replicas 1`, sin `--scenario`. El programa imprime inicio, fin y tiempo acumulado con `flush` por escenario/réplica; no lanza procesos secundarios. Una interrupción puede dejar resultados parciales: no reutilizar ese directorio como corrida final. La existencia de `summary.json` por sí sola no garantiza que todas las figuras hayan terminado: comprobar también el código de salida.
+Para comprobar los cuatro escenarios con una réplica: `--smoke --replicas 1`, sin `--scenario`. El programa imprime con `flush` las fases `preflight start/done`, `simulate start/done` (fin con tiempo de pared antes de distribución/exportación), `distribution done`, `example done`, `plots start/done` y `experiment complete`. Durante la simulación, el callback opcional `simulate(..., progress=callable)` informa tiempo modelado, horizonte, lotes procesados y personas seguras/restantes al inicio, cada ≥30 minutos modelados y al horizonte. El runner añade tiempo de pared solo a stdout; no lanza procesos secundarios. Un lote costoso puede demorar el siguiente aviso: estos mensajes prueban avance observado, no garantizan un latido cada cierto segundo. Una interrupción puede dejar resultados parciales: no reutilizar ese directorio como corrida final. La existencia de `summary.json` por sí sola no garantiza que todas las figuras hayan terminado: comprobar también el código de salida.
 
 | Opción | Predeterminado / significado |
 |---|---|
@@ -77,10 +77,14 @@ El integrador importa únicamente `motor.simulate` como contrato público del mo
 | `replicas.csv` | Una fila por escenario/réplica, semillas/índices, intervención, clasificación y métricas |
 | `summary.json` | `metadata`, `scenarios[escenario][métrica] = {n, mean, ci95}` y `paired_differences_vs_base` |
 | `distribution.csv` | Llegadas seguras exactas por escenario/réplica: tiempo, personas, masa acumulada y CDF condicional; no redondea pesos |
-| `example_replica.json` | Solo la primera corrida seleccionada: entrada de grupos con alerta/preparación y salida completa del motor |
+| `example_replica.json` | Primera corrida: ejemplo representativo acotado, métricas escalares exactas y conteos completos; **no** trayectoria completa |
 | `cdf.png` | CDF ponderada de llegadas seguras agrupadas por masa de las réplicas, intervalos uniformes configurables (`distribution_bins=480`); el CSV conserva tiempos exactos |
 | `metrics.png` | Fracción segura antes del fuego y exposición: media e IC t 95% |
 | `queues.png` | Integrales, máximos y duración de colas, más tiempo medio de llegada segura: medias e IC t 95% |
+
+El ejemplo usa `schema: evacuation_representative_example`, `version: 1`, `representative: true`, descripción y metadatos `run`. `metrics` conserva todas las métricas de la corrida completa. `result` conserva los escalares del motor (incluidos invariantes), pero solo los primeros 100 `groups` y `traversals`; `input_groups` contiene los primeros 100 grupos de entrada. `history` selecciona como máximo 481 índices uniformemente espaciados (`floor(i*(N-1)/(K-1))`), incluidos primero y último; para N=1 exporta ese único registro. Es muestreo de registros, no interpolación a minutos uniformes.
+
+`record_counts`, `exported_counts`, `truncated` y `selection` explicitan para cada colección su tamaño total, exportado, truncamiento y criterio. `evacuation_times`, `edge_max_occupancy` y `destination_people` se omiten completamente del ejemplo: solo sus conteos y los totales/invariantes escalares permanecen. Las llegadas exactas siguen en `distribution.csv`. Ningún muestreo ilustrativo altera población, dinámica, estadísticas o productos exactos; la cantidad exportada no crece con eventos, grupos, tramos o travesías.
 
 Métricas por réplica:
 
@@ -97,7 +101,7 @@ Cada IC usa estadísticas de réplicas independientes, error estándar muestral 
 
 El grafo disponible al integrar tiene 31670 nodos, 64098 aristas dirigidas, seis salidas y 18 componentes; 935 nodos no tienen salida. La grilla es 205×278 con 40542 celdas positivas; el archivo contiene 30 fuegos con semillas 1000–1029. Estas dimensiones son evidencia de entradas, **no resultados de las 120 corridas**. Los totales precisos de habitantes y su inaccesibilidad se calculan desde los archivos y se publican en cada ejecución, no se copian de resúmenes redondeados.
 
-Se retiene una sola salida completa del motor en memoria por vez y un solo ejemplo completo en disco. Las llegadas exactas se transmiten a CSV por réplica; entre corridas solo quedan estadísticas escalares y histogramas gráficos acotados. El motor todavía retiene historia y trayectorias completas **dentro** de una corrida. El CSV de distribución y el ejemplo pueden ser grandes; no son necesarios para volver a calcular las medias/IC desde `replicas.csv`. La CDF gráfica agrupa tiempos en intervalos, pero conserva pesos; esto es una resolución visual, no muestreo ni aproximación de la simulación.
+Se retiene una sola salida completa del motor en memoria por vez y un solo ejemplo representativo acotado en disco. Las llegadas exactas se transmiten a CSV por réplica; entre corridas solo quedan estadísticas escalares y histogramas gráficos acotados. El motor todavía retiene historia y trayectorias completas **dentro** de una corrida. El CSV de distribución puede ser grande; el ejemplo no exporta historias ni trayectorias completas. Ninguno es necesario para volver a calcular las medias/IC desde `replicas.csv`. La CDF gráfica agrupa tiempos en intervalos, pero conserva pesos; esto es una resolución visual, no muestreo ni aproximación de la simulación.
 
 El motor cachea rutas multifuente, pero las reservas, cierres y cambios de destinos factibles pueden invalidar cachés. No hay garantía de tiempo/memoria del lote real hasta medirlo; no sustituir población por una muestra para esconder un problema de rendimiento. Si la prueba real es lenta, registrar el tiempo y evaluar el motor en una unidad separada, sin cambiar silenciosamente semántica.
 
