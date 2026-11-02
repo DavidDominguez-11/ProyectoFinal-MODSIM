@@ -3,6 +3,11 @@ import argparse
 import copy
 import csv
 from contextlib import ExitStack
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+import os
+import signal
 import hashlib
 import json
 import math
@@ -421,8 +426,146 @@ def _plot_outputs(output, summaries, distributions, bin_edges, provisional):
     plt.close(fig)
 
 
-def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
-    """Ejecutar secuencialmente; solo una historia completa reside en memoria."""
+def _validate_workers(workers):
+    if isinstance(workers, bool) or not isinstance(workers, int) or not 1 <= workers <= 4:
+        raise ValueError('workers debe ser entero entre 1 y 4')
+    return workers
+
+
+def _cli_workers(value):
+    try:
+        return _validate_workers(int(value))
+    except ValueError:
+        raise argparse.ArgumentTypeError('workers debe ser entero entre 1 y 4') from None
+
+
+_WORKER_INPUTS = None
+
+
+def _initialize_worker(inputs):
+    global _WORKER_INPUTS
+    # El padre atiende Ctrl-C y hace shutdown(wait=True); los hijos terminan su
+    # trabajo actual sin interrumpir la serialización ni dejar procesos huérfanos.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    _WORKER_INPUTS = inputs
+
+
+def _simulation_job(inputs, job):
+    network, population, fire, seeds, contract, config, smoke, first_scenario = inputs
+    r, scenario = job
+    try:
+        preparation_seed = config['preparation_seed_start'] + r
+        groups, _ = make_groups(population, network, contract, config, preparation_seed)
+        adapted, prepared, closed, intervention = scenario_inputs(network, groups, config, scenario)
+        started = time.perf_counter()
+        label = f'pid={os.getpid()} scenario={scenario} replica={r}'
+        print(f'phase=simulate start {label}', flush=True)
+
+        def report_progress(sample):
+            print(f'phase=simulate progress {label} modeled_min={sample["time_min"]:.3f} '
+                  f'horizon={sample["horizon"]} batches={sample["event_batches"]} '
+                  f'safe={sample["people_safe"]} remaining={sample["people_remaining"]} '
+                  f'wall={time.perf_counter() - started:.3f}s', flush=True)
+
+        result = simulate(adapted, prepared, fire[r].tolist(),
+                          horizon=contract['horizonte_min'], closed_edges=closed,
+                          progress=report_progress, retain_details=False)
+        metrics = summarize_replica(result)
+        run = {'scenario': scenario, 'replica': r, 'fire_index': r,
+               'fire_seed': int(seeds[r]), 'preparation_seed': preparation_seed,
+               'provisional': bool(smoke), **intervention}
+        example = (representative_example(run, prepared, result, metrics)
+                   if r == 0 and scenario == first_scenario else None)
+        print(f'phase=simulate done {label} wall={time.perf_counter() - started:.3f}s', flush=True)
+        return {'run': run, 'metrics': metrics, 'arrivals': result['evacuation_times'],
+                'capacity_invariant': result['capacity_invariant'],
+                'no_closed_edge_traversal': result['no_closed_edge_traversal'],
+                'example': example}
+    except Exception as error:
+        raise RuntimeError(f'Job scenario={scenario} r={r}: {error}') from error
+
+
+def _worker_job(job):
+    return _simulation_job(_WORKER_INPUTS, job)
+
+
+def _ordered_jobs(inputs, jobs, workers):
+    """Como máximo 2*N futuros; nunca acumular las 120 matrices de llegadas."""
+    if workers == 1:
+        for job in jobs:
+            yield _simulation_job(inputs, job)
+        return
+    pool = ProcessPoolExecutor(max_workers=workers,
+                               mp_context=multiprocessing.get_context('spawn'),
+                               initializer=_initialize_worker, initargs=(inputs,))
+    pending = deque()
+    jobs = iter(jobs)
+
+    def submit(job):
+        try:
+            return pool.submit(_worker_job, job)
+        except Exception as error:
+            raise RuntimeError(f'Job scenario={job[1]} r={job[0]}: {error}') from error
+
+    try:
+        for job in jobs:
+            pending.append((job, submit(job)))
+            if len(pending) == 2 * workers:
+                break
+        while pending:
+            job, future = pending[0]
+            try:
+                result = future.result()
+            except Exception as error:
+                raise RuntimeError(f'Job scenario={job[1]} r={job[0]}: {error}') from error
+            pending.popleft()
+            yield result
+            # No reponer si ya se conoce un fallo fuera de orden.
+            for queued_job, queued_future in pending:
+                if queued_future.done() and queued_future.exception() is not None:
+                    try:
+                        queued_future.result()
+                    except Exception as error:
+                        raise RuntimeError(f'Job scenario={queued_job[1]} r={queued_job[0]}: {error}') from error
+            # Solo reponer después de validar/persistir la entrega anterior.
+            job = next(jobs, None)
+            if job is not None:
+                pending.append((job, submit(job)))
+    finally:
+        for _, future in pending:
+            future.cancel()
+        # Python 3.12 no ofrece terminate_workers público. Cancelar pendientes y
+        # unir trabajos ya activos, también tras error/GeneratorExit/Ctrl-C.
+        pool.shutdown(wait=True, cancel_futures=True)
+
+
+def _validate_delivery(delivery, expected_total):
+    metrics = delivery['metrics']
+    tolerance = expected_total * 1e-9
+    for name, value in metrics.items():
+        minimum = -tolerance if name == 'people_remaining' else 0
+        if value is not None and (not math.isfinite(value) or value < minimum):
+            raise ValueError('Métrica no finita o negativa del worker')
+    if not math.isclose(metrics['people_total'], expected_total, rel_tol=1e-9):
+        raise ValueError('Masa del worker no coincide con entrada')
+    if not (metrics['people_safe_before_fire'] <= metrics['people_safe'] + tolerance
+            and metrics['people_safe'] <= expected_total + tolerance
+            and metrics['people_exposed'] <= expected_total + tolerance):
+        raise ValueError('Cotas poblacionales del worker violadas')
+    arrivals = delivery['arrivals']
+    if any(not math.isfinite(a[k]) or a[k] < 0 for a in arrivals for k in ('time_min', 'people')):
+        raise ValueError('Llegadas inválidas del worker')
+    checked = summarize_replica({**metrics, 'evacuation_times': arrivals,
+                                'capacity_invariant': delivery['capacity_invariant'],
+                                'no_closed_edge_traversal': delivery['no_closed_edge_traversal']})
+    if checked != metrics or not math.isclose(metrics['safe_arrival_people'],
+                                              metrics['people_safe'], rel_tol=1e-9):
+        raise ValueError('Estadísticas del worker inconsistentes')
+
+
+def run_experiments(paths, replicas=30, smoke=False, scenarios=None, workers=1):
+    """Monte Carlo ordenado; spawn opcional, solo el padre escribe productos."""
+    _validate_workers(workers)
     scenarios = tuple(SCENARIOS if scenarios is None else scenarios)
     if not scenarios or len(set(scenarios)) != len(scenarios) or any(s not in SCENARIOS for s in scenarios):
         raise ValueError('Selección de escenarios inválida')
@@ -436,7 +579,7 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
         raise ValueError('output debe ser nuevo o un directorio vacío')
     output.mkdir(parents=True, exist_ok=True)
     metadata = {'provisional': bool(smoke), 'classification': 'provisional' if smoke else 'hypothetical_mc',
-                'replicas_per_scenario': replicas, 'input_sha256': hashes,
+                'replicas_per_scenario': replicas, 'worker_count': workers, 'input_sha256': hashes,
                 'config': config, 'contract': contract, 'attachment': attachment,
                 'rng': 'numpy.default_rng / PCG64', 'numpy_version': np.__version__,
                 'scipy_version': scipy_version, 'python_version': sys.version.split()[0],
@@ -465,33 +608,18 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
         distribution_writer.writerow(['scenario', 'replica', 'time_min', 'people',
                                       'cumulative_people', 'conditional_cdf', 'provisional'])
         writer = None
-        # Réplica externa: generar preparación una vez y copiar para cada escenario.
-        for r in range(replicas):
-            preparation_seed = config['preparation_seed_start'] + r
-            groups, _ = make_groups(population, network, contract, config, preparation_seed)
-            replica_fire = fire[r].tolist()
-            for scenario in scenarios:
-                adapted, prepared, closed, intervention = scenario_inputs(network, groups, config, scenario)
-                print(f'{scenario} r={r + 1}/{replicas} start elapsed={time.perf_counter() - started:.3f}s', flush=True)
-                simulation_started = time.perf_counter()
-                print(f'phase=simulate start scenario={scenario} replica={r}', flush=True)
-
-                def report_progress(sample):
-                    print(f'phase=simulate progress scenario={scenario} replica={r} '
-                          f'modeled_min={sample["time_min"]:.3f} horizon={sample["horizon"]} '
-                          f'batches={sample["event_batches"]} safe={sample["people_safe"]} '
-                          f'remaining={sample["people_remaining"]} '
-                          f'wall={time.perf_counter() - simulation_started:.3f}s', flush=True)
-
-                result = simulate(adapted, prepared, replica_fire,
-                                  horizon=contract['horizonte_min'], closed_edges=closed,
-                                  progress=report_progress, retain_details=False)
-                print(f'phase=simulate done scenario={scenario} replica={r} '
-                      f'wall={time.perf_counter() - simulation_started:.3f}s', flush=True)
-                metrics = summarize_replica(result)
-                run = {'scenario': scenario, 'replica': r, 'fire_index': r,
-                       'fire_seed': int(seeds[r]), 'preparation_seed': preparation_seed,
-                       'provisional': bool(smoke), **intervention}
+        inputs = (network, population, fire, seeds, contract, config, smoke, scenarios[0])
+        jobs = ((r, scenario) for r in range(replicas) for scenario in scenarios)
+        print(f'phase=workers start workers={workers} pid={os.getpid()}', flush=True)
+        deliveries = _ordered_jobs(inputs, jobs, workers)
+        try:
+            for delivery in deliveries:
+                run, metrics = delivery['run'], delivery['metrics']
+                scenario, r = run['scenario'], run['replica']
+                try:
+                    _validate_delivery(delivery, attachment['people_total'])
+                except Exception as error:
+                    raise RuntimeError(f'Job scenario={scenario} r={r}: {error}') from error
                 row = {**run, **metrics}
                 if writer is None:
                     writer = csv.DictWriter(stream, fieldnames=list(row))
@@ -500,9 +628,7 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
                 stream.flush()
                 metadata['runs'].append(run)
                 rows[scenario].append(metrics)
-                # Distribución exacta se transmite a disco; solo el histograma gráfico
-                # acotado queda entre réplicas (no millones de tiempos únicos en RAM).
-                arrivals = sorted(result['evacuation_times'], key=lambda a: a['time_min'])
+                arrivals = sorted(delivery['arrivals'], key=lambda a: a['time_min'])
                 arrival_mass = math.fsum(a['people'] for a in arrivals)
                 cumulative = 0.
                 for arrival in arrivals:
@@ -516,12 +642,13 @@ def run_experiments(paths, replicas=30, smoke=False, scenarios=None):
                 distribution_stream.flush()
                 del arrivals
                 print(f'phase=distribution done scenario={scenario} replica={r}', flush=True)
-                if r == 0 and scenario == scenarios[0]:
-                    _write_json(output / 'example_replica.json',
-                                representative_example(run, prepared, result, metrics))
+                if delivery['example'] is not None:
+                    _write_json(output / 'example_replica.json', delivery['example'])
                     print(f'phase=example done scenario={scenario} replica={r}', flush=True)
-                del result, adapted, prepared
                 print(f'{scenario} r={r + 1}/{replicas} done elapsed={time.perf_counter() - started:.3f}s', flush=True)
+        finally:
+            deliveries.close()
+        print(f'phase=workers done workers={workers} pid={os.getpid()}', flush=True)
     summaries = {s: {metric: confidence_interval(row[metric] for row in rows[s])
                      for metric in rows[s][0]} for s in scenarios}
     paired = {}
@@ -548,13 +675,15 @@ def main(argv=None):
         parser.add_argument('--' + key, type=Path, default=ROOT / default,
                             help=f'Ruta {key}; predeterminada relativa a raíz: {default}')
     parser.add_argument('--replicas', type=int, default=30, help='Réplicas distintas por escenario (predeterminado: 30)')
+    parser.add_argument('--workers', type=_cli_workers, default=1,
+                        help='Procesos 1..4 (predeterminado: 1); >1 requiere spawn y RAM medida')
     parser.add_argument('--smoke', action='store_true', help='Permitir <30 réplicas; TODAS las salidas son provisionales')
     parser.add_argument('--scenario', choices=SCENARIOS, help='Solo este escenario; predeterminado: los cuatro')
     args = parser.parse_args(argv)
     try:
         run_experiments({key: getattr(args, key) for key in DEFAULTS}, args.replicas, args.smoke,
-                        [args.scenario] if args.scenario else None)
-    except (ValueError, KeyError, TypeError, OSError, OverflowError) as error:
+                        [args.scenario] if args.scenario else None, workers=args.workers)
+    except (ValueError, KeyError, TypeError, OSError, OverflowError, RuntimeError) as error:
         parser.error(str(error))
 
 
