@@ -221,3 +221,9 @@ __marimo__/
 
 # Datos descargados (se regeneran con scripts/fuego/f1 y f3)
 data/crudo/
+
+# Productos voluminosos regenerables de evacuación; se versionan métricas y figuras.
+/data/procesado/red_vial.json
+/salidas/evacuacion_smoke*/
+/salidas/evacuacion/example_replica.json
+/salidas/evacuacion/distribution.csv
