@@ -1,0 +1,3 @@
+-r requirements-evacuacion.txt
+streamlit>=1.50
+plotly>=6

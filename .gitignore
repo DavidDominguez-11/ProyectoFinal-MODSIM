@@ -231,3 +231,6 @@ data/crudo/
 /salidas/evacuacion/replicas.csv
 /salidas/evacuacion_final/example_replica.json
 /salidas/evacuacion_final/distribution.csv
+
+# Trayectorias del demo (regenerables con scripts/demo/precomputar.py)
+/salidas/demo/
