@@ -46,13 +46,11 @@ def render(S):
 
     # ------------------------------------------------------------ A) estructura
     if _sel == 0:
-        m = st.columns(5)
+        m = st.columns(3)
         m[0].metric('Nodos (intersecciones)', f'{N:,}')
-        m[1].metric('Aristas dirigidas', f'{E:,}')
-        m[2].metric('Pares opuestos (calles)', f'{E // 2:,}')
-        m[3].metric('Longitud total', f"{S['edge_len'].sum() / 2000:,.0f} km")
+        m[1].metric('Aristas dirigidas', f'{E:,}', 'dos por cada calle (una por sentido)', delta_color='off')
+        m[2].metric('Longitud de la red', f"{S['edge_len'].sum() / 2000:,.0f} km")
         outdeg = np.bincount(S['u'], minlength=N)
-        m[4].metric('Grado de salida medio', f'{outdeg.mean():.2f}')
         c1, c2, c3, c4 = st.columns(4)
         zone = c1.selectbox('Zona a observar', list(D.TOWNS) + ['Todo el dominio'], index=1, key='ra')
         radius = c2.slider('Radio de la vista (km)', 0.3, 2.0, 0.45, 0.05, key='rrad') if zone != 'Todo el dominio' else 7
@@ -112,24 +110,18 @@ def render(S):
         st.plotly_chart(fig, width='stretch')
         st.caption('Cada tramo es **dos aristas opuestas** (una por sentido), cada una con su propia capacidad. Con '
                    '"flechas" activadas se ven los dos sentidos separados; en esta red la bidireccionalidad es un supuesto.')
-        a, b = st.columns(2)
         rp = X['road_params']
         tab = pd.DataFrame([{
             'Clase MTFCC': k, 'Tipo': CLASS_INFO[k][0], 'Aristas': int((S['edge_mtfcc'] == k).sum()),
             'Velocidad (km/h)': rp.get(k, {}).get('speed_kmh', '—'),
             'Capacidad (grupos simultáneos)': rp.get(k, {}).get('capacity_groups', '—'),
             'Longitud media (m)': round(float(S['edge_len'][S['edge_mtfcc'] == k].mean()), 1)} for k in CLASS_INFO])
-        a.markdown('**Atributos de las aristas por jerarquía vial** (supuestos hipotéticos)')
-        a.dataframe(tab, hide_index=True, width='stretch')
-        h = go.Figure(go.Histogram(x=outdeg, marker_color='#1f6feb', nbinsx=8))
-        h.update_layout(height=260, margin=dict(t=30, b=30), title='Grado de salida de los nodos',
-                        xaxis_title='aristas que salen del nodo', yaxis_title='nodos')
-        b.plotly_chart(h, width='stretch')
+        st.markdown('**Atributos de las aristas por jerarquía vial** (supuestos hipotéticos)')
+        st.dataframe(tab, hide_index=True, width='stretch')
 
     # ------------------------------------------------------------ B) conectividad y destinos
     if _sel == 1:
         comp = X['node_comp']
-        sizes = np.bincount(comp, minlength=len(X['comps']))
         no_exit = np.array([not c['tiene_salida'] for c in X['comps']])[comp]
         m = st.columns(4)
         m[0].metric('Componentes conexas', len(X['comps']))

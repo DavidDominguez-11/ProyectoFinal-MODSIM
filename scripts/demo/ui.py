@@ -1,5 +1,4 @@
 """Ayudantes compartidos del demo: carga con caché, mapa base, capas y banners por concepto."""
-import io
 import sys
 from pathlib import Path
 
@@ -55,7 +54,6 @@ def base_image():
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from matplotlib.colors import LightSource
-    from PIL import Image
     S = static()
     g = S['grid']
     ls = LightSource(azdeg=315, altdeg=40)
@@ -68,7 +66,6 @@ def base_image():
     ax.imshow(pop, extent=EXTENT, cmap='Purples', alpha=.45, vmin=0, vmax=np.percentile(g['poblacion'][g['poblacion'] > 0], 98))
     xy, u, v = S['xy'], S['u'], S['v']
     seen = u < v
-    keep = seen | True
     for cls, w, c in (('S1400', .5, '#6b6b6b'), ('S1740', .5, '#777'), ('S1500', .5, '#777'),
                       ('S1200', 1.4, '#2b2b2b'), ('S1100', 2.2, '#000')):
         m = (S['edge_mtfcc'] == cls) & seen
@@ -115,20 +112,18 @@ def fire_trace(arrival, t, opacity=.8, colorbar=True):
                       name='Fuego', showlegend=False)
 
 
-@st.cache_data
-def burned_area(fire):
-    """Celdas (1 ha) quemadas en cada minuto 0..480, por réplica."""
-    return np.stack([np.bincount(f[f >= 0], minlength=481)[:481].cumsum() for f in fire])
-
-
-
 def pick_run(runs, key):
+    """Elige escenario y réplica; si solo hay una corrida disponible no muestra selectores."""
     if not runs:
         st.warning('No hay réplicas precalculadas en `salidas/demo/`. Ejecuta '
                    '`python scripts/demo/precomputar.py --scenario base --replica 0`.')
         st.stop()
-    c1, c2 = st.columns(2)
     scs = sorted({s for s, _ in runs}, key=list(D.SCENARIO_LABELS).index)
+    if len(runs) == 1:
+        sc, rep = next(iter(runs))
+        st.caption(f'Corrida analizada: **{D.SCENARIO_LABELS[sc]}**, fuego réplica {rep} (semilla {1000 + rep}).')
+        return sc, rep, traj(runs[(sc, rep)])
+    c1, c2 = st.columns(2)
     sc = c1.selectbox('Escenario', scs, format_func=D.SCENARIO_LABELS.get, key=key + 's')
     reps = sorted(r for s, r in runs if s == sc)
     rep = c2.selectbox('Réplica de fuego', reps, key=key + 'r')

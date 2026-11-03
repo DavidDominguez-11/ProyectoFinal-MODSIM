@@ -43,11 +43,10 @@ def render(S):
         layer = st.radio('Capa ráster', ['Combustible (clase FBFM40)', 'Elevación (m)', 'Pendiente (°)',
                                          'Población (personas por celda)', 'Perímetro final del incendio'],
                          horizontal=True)
-        o1, o2, o3, o4 = st.columns(4)
+        o1, o2, o3 = st.columns(3)
         roads = o1.checkbox('Superponer carreteras (vectorial)', True)
         grid_lines = o2.checkbox('Mostrar bordes de celda', False, help='Se aprecia al acercarse a un pueblo')
-        nist = o3.checkbox('Superponer observaciones NIST (puntos)', False)
-        zone = o4.selectbox('Zona', ['Todo el dominio'] + list(D.TOWNS), index=1, key='gz')
+        zone = o3.selectbox('Zona', ['Todo el dominio'] + list(D.TOWNS), index=1, key='gz')
         radius = 4 if zone != 'Todo el dominio' else 7
         rows_, cols_ = np.meshgrid(np.arange(D.SHAPE[0]), np.arange(D.SHAPE[1]), indexing='ij')
         cust = np.stack([rows_, cols_], -1).astype(np.int16)
@@ -72,11 +71,6 @@ def render(S):
                                      showscale=False, **hm))
         if roads:
             fig.add_trace(roads_trace(S, '#111', 1.1))
-        if nist:
-            ob = pd.read_csv(D.ROOT / 'data/procesado/observaciones_nist.csv')
-            fig.add_trace(go.Scatter(x=ob.x, y=ob.y, mode='markers', name='Observaciones NIST (puntos)',
-                                     marker=dict(size=7, color='#00bcd4', line=dict(width=1, color='black')),
-                                     hovertext=ob.hora_local))
         plain_layout(fig, view_for(zone, radius))
         left, right = st.columns([3, 1.2])
         left.plotly_chart(fig, width='stretch')
@@ -180,14 +174,11 @@ def render(S):
         st.markdown('**Autómata celular en vivo** sobre una ventana del terreno real: se enciende la celda central y se '
                     'ejecuta el mismo código del modelo (`simular`). Cambia el viento o el relieve para ver cómo '
                     'deforman la propagación.')
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
         town = c1.selectbox('Ignición cerca de', list(D.TOWNS), index=2, key='ct')
-        half = c2.slider('Tamaño de la ventana (celdas)', 20, 60, 40, key='ch')
-        seed = c3.number_input('Semilla aleatoria', 0, 999, 1, key='cs')
-        wind_mode = c4.radio('Viento', ['ERA5 real', 'Sin viento', 'Fuerte del NE (10 m/s)'], key='cw')
-        c5, c6, _ = st.columns(3)
-        flat = c5.checkbox('Terreno plano (ignora pendiente)', False)
-        dur = c6.slider('Duración simulada (min)', 30, 240, 120, key='cd')
+        wind_mode = c2.radio('Viento', ['ERA5 real', 'Sin viento', 'Fuerte del NE (10 m/s)'], key='cw')
+        flat = c3.checkbox('Terreno plano (ignora pendiente)', False)
+        half, seed, dur = 40, 1, 120
         ra, ca = town_center_cell(town)
         r = int(np.clip(ra, half, D.SHAPE[0] - half - 1))
         c = int(np.clip(ca, half, D.SHAPE[1] - half - 1))

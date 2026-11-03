@@ -96,7 +96,6 @@ def load_traj(path):
 
 def positions_at(static, traj, fire_rep, t):
     """Posición (x, y) y estado de cada grupo en el minuto t."""
-    G = len(traj['g_people'])
     xy = static['xy']
     tg, te = traj['tr_group'], traj['tr_edge']
     state = np.where(t < traj['g_ready'], PREP, WAIT).astype(np.int8)

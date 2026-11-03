@@ -81,19 +81,6 @@ def wait_stats(_T, key):
     return wait, travel, never
 
 
-@st.cache_data(show_spinner=False)
-def event_histogram(_T, key, _S, _X, rep):
-    bins = np.arange(0, 491, 10)
-    ef = D.edge_fire_times(_X, len(_S['u']), _S['fire'][rep])
-    nf = D.node_fire_times(_S, _S['fire'][rep])
-    return dict(bins=bins,
-                ready=np.histogram(_T['g_ready'], bins)[0],
-                arrival=np.histogram(_T['tr_end'][_T['tr_outcome'] == 0], bins)[0],
-                interrupt=np.histogram(_T['tr_end'][_T['tr_outcome'] == 1], bins)[0],
-                closure=np.histogram(ef[np.isfinite(ef)], bins)[0],
-                node_fire=np.histogram(nf[np.isfinite(nf)], bins)[0])
-
-
 def render(S, runs):
     X = net_extra()
     banner('des', '3', 'DES: simulación de eventos discretos (entidades, recursos y colas)',
@@ -197,17 +184,6 @@ def render(S, runs):
         m[3].metric('ready (prioridad 3)', f'{n_ready:,}')
         m[4].metric('Eventos en la ventana', f'{n_clo + n_int + n_nf + n_arr + n_ready:,}', f'la tabla lista hasta {len(df):,}', delta_color='off')
         st.dataframe(df.round({'Tiempo (min)': 3}), hide_index=True, width='stretch', height=380)
-        h = event_histogram(T, key, S, X, rep)
-        ctr = h['bins'][:-1] + 5
-        fig = go.Figure()
-        for k, nm, col in [('ready', 'ready (salen del hogar)', '#8e9aaf'), ('arrival', 'arrival (llegan a un nodo)', '#1f6feb'),
-                           ('interrupt', 'interrupción por cierre', '#e5134b'), ('closure', 'closure (tramo se quema)', '#f08a00'),
-                           ('node_fire', 'node_fire (nodo se quema)', '#7b2cbf')]:
-            fig.add_trace(go.Bar(x=ctr, y=h[k], name=nm, marker_color=col))
-        fig.add_vrect(x0=t0, x1=t1, fillcolor='#f08a00', opacity=.25, line_width=0)
-        fig.update_layout(barmode='stack', height=380, margin=dict(t=30, b=30), title='Eventos por tipo cada 10 min (banda naranja = ventana elegida)',
-                          xaxis_title='min desde la ignición', yaxis_title='eventos (escala log)', yaxis_type='log', legend=dict(orientation='h', y=-0.3))
-        st.plotly_chart(fig, width='stretch')
 
     # ------------------------------------------------------------ C) recursos
     if _sel == 2:
@@ -225,7 +201,7 @@ def render(S, runs):
         st.markdown('**Cuellos de botella:** los recursos (aristas) que pasaron más tiempo con todos sus servidores ocupados')
         view_tab = tab.rename(columns={'calle': 'Calle', 'capacidad': 'Capacidad c', 'grupos': 'Grupos que la usaron',
                                        'ocupacion_max': 'Ocupación máx.', 'saturada_min': 'Min saturada', 'utilizacion': 'Utilización media'})
-        st.dataframe(view_tab.rename(columns={'arista': 'Arista (id)'}).head(25), hide_index=True, width='stretch', height=260)
+        st.dataframe(view_tab.rename(columns={'arista': 'Arista (id)'}).head(10), hide_index=True, width='stretch')
         choice = st.selectbox('Examinar un recurso', tab.index, format_func=lambda i: f"{tab.calle[i]} (arista e{tab.arista[i]}) · c = {tab.capacidad[i]} · saturada {tab.saturada_min[i]} min")
         e = int(tab.arista[choice])
         cap = int(S['edge_cap'][e])
@@ -261,22 +237,20 @@ def render(S, runs):
     # ------------------------------------------------------------ D) colas y espera
     if _sel == 3:
         wait, travel, never = wait_stats(T, key)
-        mv = T['moved']
         m = st.columns(5)
         m[0].metric('Espera media (ponderada)', f'{np.average(wait, weights=w):.0f} min')
         m[1].metric('Mediana', f'{wquantile(wait, w, .5):.0f} min')
         m[2].metric('Percentil 90', f'{wquantile(wait, w, .9):.0f} min')
         m[3].metric('Personas con espera > 60 min', f'{100 * w[wait > 60].sum() / w.sum():.0f} %')
         m[4].metric('Nunca salieron del nodo', f'{100 * w[never].sum() / w.sum():.1f} %', 'sin ruta ni capacidad', delta_color='off')
-        a, b = st.columns(2)
+        a, b, c3 = st.columns(3)
         fq = go.Figure()
         fq.add_trace(go.Scatter(x=T['hist_t'], y=T['hist_qpeople'], name='Personas en cola', line=dict(color='#7b2cbf', width=3), fill='tozeroy'))
-        fq.add_trace(go.Scatter(x=T['hist_t'], y=T['hist_qgroups'], name='Grupos en cola', line=dict(color='#f08a00', width=2, dash='dot')))
-        fq.update_layout(height=340, margin=dict(t=30, b=30), title='Longitud de la cola en el tiempo', xaxis_title='min desde la ignición',
-                         yaxis_title='personas / grupos', legend=dict(orientation='h', y=-0.3))
+        fq.update_layout(height=340, margin=dict(t=30, b=30), title='Personas en cola en el tiempo', xaxis_title='min desde la ignición',
+                         yaxis_title='personas', showlegend=False)
         a.plotly_chart(fq, width='stretch')
         fh = go.Figure(go.Histogram(x=wait, y=w, histfunc='sum', nbinsx=48, marker_color='#7b2cbf'))
-        fh.update_layout(height=340, margin=dict(t=30, b=30), title='Distribución del tiempo de espera (personas)',
+        fh.update_layout(height=340, margin=dict(t=30, b=30), title='Tiempo de espera por persona',
                          xaxis_title='min esperando en cola', yaxis_title='personas')
         b.plotly_chart(fh, width='stretch')
         cfg = json.loads((D.ROOT / 'config/escenarios_evacuacion.json').read_text())
@@ -289,20 +263,10 @@ def render(S, runs):
             ww = w[mask]
             vals = [float(np.average(np.maximum(T['g_ready'][mask] - alert, 0), weights=ww)), float(np.average(wait[mask], weights=ww)),
                     float(np.average(travel[mask], weights=ww))]
-            fb.add_trace(go.Bar(name=nm, x=['Preparación (demora)', 'Espera en cola', 'Viaje por aristas'], y=vals, text=[f'{v:.0f}' for v in vals], textposition='outside'))
-        fb.update_layout(barmode='group', height=330, margin=dict(t=30, b=30), title='¿En qué se va el tiempo? (promedio ponderado, min)', yaxis_title='min')
-        a, b = st.columns(2)
-        a.plotly_chart(fb, width='stretch')
-        towns = D.town_xy()
-        gx, gy = S['xy'][T['g_node'], 0], S['xy'][T['g_node'], 1]
-        zone = np.full(G, 'Resto del dominio', dtype=object)
-        for tname, (tx, ty) in towns.items():
-            zone[np.hypot(gx - tx, gy - ty) < 3000] = tname
-        zs = pd.DataFrame({'zona': zone, 'w': w, 'wait': wait, 'wxw': wait * w}).groupby('zona').agg(w=('w', 'sum'), wxw=('wxw', 'sum'))
-        zs['espera'] = zs.wxw / zs.w
-        fz = go.Figure(go.Bar(x=zs.index, y=zs.espera, marker_color='#f08a00', text=[f'{v:.0f}' for v in zs.espera], textposition='outside'))
-        fz.update_layout(height=330, margin=dict(t=30, b=30), title='Espera media por zona de origen (min)', yaxis_title='min')
-        b.plotly_chart(fz, width='stretch')
+            fb.add_trace(go.Bar(name=nm, x=['Preparación', 'Cola', 'Viaje'], y=vals, text=[f'{v:.0f}' for v in vals], textposition='outside'))
+        fb.update_layout(barmode='group', height=340, margin=dict(t=30, b=30), title='¿En qué se va el tiempo? (min)', yaxis_title='min',
+                         legend=dict(orientation='h', y=-0.25))
+        c3.plotly_chart(fb, width='stretch')
         st.markdown('**¿Dónde se forman las colas?** Mapa de calor de las personas que esperan en un instante dado')
         tq = st.slider('Minuto', 0, 480, 150, key='dq')
         px, py, stt = D.positions_at(S, T, S['fire'][rep], tq)

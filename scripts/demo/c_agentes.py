@@ -10,7 +10,7 @@ from scipy import stats
 
 from scripts.demo import datos as D
 from scripts.demo.ui import XC, YC, banner, base_layout, pick_run, view_for
-from scripts.demo.ui_extra import lazy_tabs, seg_xy
+from scripts.demo.ui_extra import lazy_tabs
 
 PURPLE = '#8e44ad'
 STATE_LABEL = {0: 'A salvo (salió del dominio)', 2: 'Alcanzado por el fuego', 4: 'Esperando en cola al terminar', 5: 'En ruta al terminar'}
@@ -48,24 +48,18 @@ def render(S, runs):
         m[2].metric('Peso medio', f'{w.mean():.2f}', 'personas por grupo (máx. 3)', delta_color='off')
         m[3].metric('Alerta (igual para todos)', f'{alert:.0f} min')
         m[4].metric('Demora de preparación', f'{prep.mean():.1f} min', f'Gamma(forma 2, escala {cfg["preparation_gamma_scale_min"]:.0f})', delta_color='off')
-        a, b = st.columns(2)
         xs = np.linspace(0, float(np.percentile(prep, 99.8)), 200)
         fh = go.Figure()
         fh.add_trace(go.Histogram(x=prep, histnorm='probability density', nbinsx=60, name='Agentes simulados', marker_color=PURPLE, opacity=.65))
         fh.add_trace(go.Scatter(x=xs, y=stats.gamma.pdf(xs, cfg['preparation_gamma_shape'], scale=cfg['preparation_gamma_scale_min']),
                                 name='Gamma teórica', line=dict(color='#ffd400', width=3)))
-        fh.update_layout(height=320, margin=dict(t=30, b=30), title='Demora de preparación de los agentes (min)', xaxis_title='min después de la alerta',
+        fh.update_layout(height=300, margin=dict(t=30, b=30), title='Demora de preparación de los agentes (min)', xaxis_title='min después de la alerta',
                          yaxis_title='densidad', legend=dict(orientation='h', y=-0.3))
-        a.plotly_chart(fh, width='stretch')
-        fw = go.Figure(go.Histogram(x=w, nbinsx=40, marker_color=PURPLE))
-        fw.update_layout(height=320, margin=dict(t=30, b=30), title='Peso de los agentes (personas por grupo)', xaxis_title='personas', yaxis_title='grupos', yaxis_type='log')
-        b.plotly_chart(fw, width='stretch')
+        st.plotly_chart(fh, width='stretch')
         st.caption('La preparación es **independiente por agente** (heterogeneidad): se muestrea de una Gamma asimétrica y positiva; '
                    'el histograma simulado reproduce la curva teórica.')
-        c1, c2, c3 = st.columns(3)
-        color_by = c1.selectbox('Colorear el mapa de agentes por', ['Estado final', 'Demora de preparación (min)', 'Peso (personas)', 'Minuto de llegada a la salida'])
-        zone = c2.selectbox('Zona', ['Todo el dominio'] + list(D.TOWNS), key='agz')
-        frac = c3.slider('Agentes dibujados (%)', 10, 100, 60, key='agf')
+        color_by = st.selectbox('Colorear el mapa de agentes por', ['Estado final', 'Demora de preparación (min)', 'Peso (personas)', 'Minuto de llegada a la salida'])
+        zone, frac = 'Todo el dominio', 60
         sel = np.random.default_rng(5).random(G) < frac / 100
         ox, oy = S['xy'][T['g_node'], 0].astype(np.float32), S['xy'][T['g_node'], 1].astype(np.float32)
         fm = go.Figure()
@@ -145,14 +139,6 @@ def render(S, runs):
             rows.append({'Escenario': D.SCENARIO_LABELS[s_name], 'Media': round(float(x.mean()), 2), '± IC 95 %': round(float(h), 2),
                          'Mín': round(float(x.min()), 2), 'Máx': round(float(x.max()), 2)})
         b.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
-        base = rep_df[rep_df.scenario == 'base'].sort_values('replica')[metric].values
-        fd = go.Figure()
-        for s_name in ['early_alert', 'skyway_closed', 'exit_capacity']:
-            diff = rep_df[rep_df.scenario == s_name].sort_values('replica')[metric].values - base
-            fd.add_trace(go.Box(y=diff, name=D.SCENARIO_LABELS[s_name], marker_color=SC_COLOR[s_name], boxpoints='all', jitter=.4, pointpos=0, boxmean=True))
-        fd.add_hline(y=0, line_dash='dash')
-        fd.update_layout(height=340, margin=dict(t=30, b=30), showlegend=False, title='Diferencia pareada respecto a la base, réplica por réplica', yaxis_title=f'Δ {mlabel}')
-        st.plotly_chart(fd, width='stretch')
 
     # ------------------------------------------------------------ C) variabilidad del fuego
     if _sel == 2:
@@ -171,10 +157,6 @@ def render(S, runs):
             fm.update_yaxes(visible=False, row=1, col=i + 1)
         fm.update_layout(height=330, margin=dict(t=40, b=10, l=0, r=0))
         st.plotly_chart(fm, width='stretch')
-        a, b = st.columns(2)
-        fa = go.Figure(go.Bar(x=np.arange(30), y=area, marker_color='#e5134b'))
-        fa.update_layout(height=320, margin=dict(t=30, b=30), title='Área quemada por réplica (ha)', xaxis_title='réplica', yaxis_title='ha')
-        a.plotly_chart(fa, width='stretch')
         r_, p_ = stats.pearsonr(area, base.pct.values)
         fs = go.Figure(go.Scatter(x=area, y=base.pct.values, mode='markers+text', text=[str(i) for i in range(30)], textposition='top center',
                                   marker=dict(size=10, color=PURPLE)))
@@ -183,7 +165,7 @@ def render(S, runs):
         fs.add_trace(go.Scatter(x=xx, y=np.polyval(coef, xx), mode='lines', line=dict(color='#111', dash='dash'), name='tendencia'))
         fs.update_layout(height=320, margin=dict(t=30, b=30), showlegend=False, title=f'Escenario base: ¿más fuego = menos evacuados a tiempo? (r = {r_:.2f})',
                          xaxis_title='área quemada (ha)', yaxis_title='% seguros antes del fuego')
-        b.plotly_chart(fs, width='stretch')
+        st.plotly_chart(fs, width='stretch')
         seeds = pd.DataFrame({'Réplica': np.arange(30), 'Semilla de fuego': S['seeds'], 'Semilla de preparación': cfg['preparation_seed_start'] + np.arange(30),
                               'Área quemada (ha)': area})
         for s_name in D.SCENARIO_LABELS:
