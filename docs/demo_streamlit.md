@@ -14,3 +14,16 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-demo
 Vistas: simulación animada (fuego + grupos por estado), rutas de grupos concretos y mapa de congestión, incendio solo (30 réplicas, probabilidad de quema, observaciones NIST), comparación de escenarios (120 corridas versionadas) y resumen de supuestos.
 
 Los parámetros de evacuación son hipotéticos; el demo no valida el modelo contra datos históricos.
+
+## Secciones por concepto de la materia
+
+La barra lateral separa cuatro conceptos, cada uno con su color y un banner que explica qué es y en qué archivo del proyecto está:
+
+| Color | Concepto | Subvistas |
+|---|---|---|
+| Verde | Grillas, autómatas y SIG | capas ráster + vectorial; vecindad de Moore con la fórmula real; autómata en vivo sobre terreno real |
+| Azul | Redes: grafo vial dirigido | estructura (nodos, aristas, sentido); componentes y destinos; selección de rutas con Dijkstra y cierres |
+| Naranja | DES: entidades, recursos y colas | anatomía; agenda de eventos ordenada; saturación de aristas; colas y espera |
+| Morado | Agentes y corridas múltiples | atributos de los grupos; Monte Carlo pareado; variabilidad del fuego |
+
+Enlaces directos: `?p=<vista>&sub=<subvista>` (desde 0), por ejemplo `http://localhost:8501/?p=1&sub=2`.
