@@ -39,7 +39,11 @@ def traj(path):
 
 @st.cache_resource(show_spinner='Dibujando mapa base…')
 def base_image():
-    """Relieve sombreado + población + red vial como imagen de fondo (rápida de repintar)."""
+    """Relieve + población + red vial como JPEG (data URI, cacheado en disco) para el fondo del mapa."""
+    import base64
+    cache = D.DEMO / 'base_map.jpg'
+    if cache.exists():
+        return 'data:image/jpeg;base64,' + base64.b64encode(cache.read_bytes()).decode()
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -67,22 +71,21 @@ def base_image():
     ax.set_xlim(EXTENT[0], EXTENT[1])
     ax.set_ylim(EXTENT[2], EXTENT[3])
     ax.axis('off')
-    buf = io.BytesIO()
-    fig.savefig(buf, format='png')
+    D.DEMO.mkdir(parents=True, exist_ok=True)
+    fig.savefig(cache, format='jpg', pil_kwargs={'quality': 82})
     plt.close(fig)
-    buf.seek(0)
-    return Image.open(buf).convert('RGB')
+    return 'data:image/jpeg;base64,' + base64.b64encode(cache.read_bytes()).decode()
 
 
-def base_layout(fig, view, height=640):
+def base_layout(fig, view, height=660):
     fig.update_layout(
         images=[dict(source=base_image(), xref='x', yref='y', x=EXTENT[0], y=EXTENT[3],
                      sizex=EXTENT[1] - EXTENT[0], sizey=EXTENT[3] - EXTENT[2], sizing='stretch',
                      layer='below', opacity=1)],
         xaxis=dict(range=view[0], visible=False, constrain='domain'),
-        yaxis=dict(range=view[1], visible=False, scaleanchor='x', scaleratio=1),
-        margin=dict(l=0, r=0, t=0, b=0), height=height, uirevision=str(view),
-        legend=dict(orientation='h', y=-0.02, bgcolor='rgba(255,255,255,.7)'),
+        yaxis=dict(range=view[1], visible=False, scaleanchor='x', scaleratio=1, constrain='domain'),
+        margin=dict(l=0, r=70, t=0, b=64), height=height, uirevision=str(view),
+        legend=dict(orientation='h', yanchor='top', y=-0.01, x=0, bgcolor='rgba(0,0,0,0)'),
         plot_bgcolor='#dfe6ec')
     return fig
 
@@ -96,13 +99,19 @@ def view_for(name, radius_km=7):
     return ([x - r * 1.35, x + r * 1.35], [y - r, y + r])
 
 
-def fire_trace(arrival, t, opacity=.8):
-    age = np.where((arrival >= 0) & (arrival <= t), t - arrival, np.nan).astype(float)
+def fire_trace(arrival, t, opacity=.8, colorbar=True):
+    age = np.where((arrival >= 0) & (arrival <= t), t - arrival, np.nan).astype(np.float32)
     return go.Heatmap(z=age, x=XC, y=YC, colorscale=[[0, '#fff3a0'], [.12, '#ff9d00'], [.35, '#d62800'],
                                                    [.7, '#5a0b00'], [1, '#1a1a1a']],
-                      zmin=0, zmax=240, opacity=opacity, showscale=True, hoverinfo='skip',
-                      colorbar=dict(title='min desde<br>que arde', len=.35, y=.2, thickness=12),
+                      zmin=0, zmax=240, opacity=opacity, showscale=colorbar, hoverinfo='skip',
+                      colorbar=dict(title='min desde<br>que arde', len=.4, y=.25, x=1.0, xanchor='left', thickness=12),
                       name='Fuego', showlegend=False)
+
+
+@st.cache_data
+def burned_area(fire):
+    """Celdas (1 ha) quemadas en cada minuto 0..480, por réplica."""
+    return np.stack([np.bincount(f[f >= 0], minlength=481)[:481].cumsum() for f in fire])
 
 
 # ----------------------------------------------------------------- barra lateral
@@ -143,66 +152,78 @@ if page.startswith('🚨'):
     st.header('Simulación animada: el fuego avanza y las familias evacúan')
     sc, rep, T = pick_run('anim')
     fire_rep = S['fire'][rep]
-    c1, c2, c3 = st.columns([2, 2, 3])
-    zone = c1.selectbox('Zona del mapa', ['Todo el dominio'] + list(D.TOWNS))
-    show_fire = c2.checkbox('Fuego', True)
-    show_closed = c2.checkbox('Tramos cerrados por política', True)
-    step = c3.select_slider('Velocidad de reproducción (min simulados por cuadro)', [2, 5, 10, 15, 30], 10)
-    frac = c3.slider('Grupos dibujados (%)', 10, 100, 50, help='Menos puntos = más fluido')
-    if 't_anim' not in st.session_state:
-        st.session_state.t_anim = 0
-    t = st.slider('Minuto desde la ignición (06:25 hora local)', 0, 480, key='t_anim')
-    play = st.button('▶ Reproducir desde aquí')
-    holder_map, holder_k = st.empty(), st.empty()
+    with st.sidebar:
+        st.markdown('**Controles de la animación**')
+        zone = st.selectbox('Zona del mapa', ['Todo el dominio'] + list(D.TOWNS))
+        show_fire = st.checkbox('Fuego', True)
+        show_closed = st.checkbox('Tramos cerrados por política', True)
+        step = st.select_slider('Min simulados por cuadro', [2, 5, 10, 15, 30], 10)
+        frac = st.slider('Grupos dibujados (%)', 10, 100, 50, help='Menos puntos = más fluido')
+    st.session_state.setdefault('t_anim', 0)
+    st.session_state.setdefault('playing', False)
     sel = np.random.default_rng(3).random(len(T['g_people'])) < frac / 100
 
-    def draw(t):
-        px, py, st_ = D.positions_at(S, T, fire_rep, t)
-        fig = go.Figure()
-        if show_fire:
-            fig.add_trace(fire_trace(fire_rep, t))
-        if show_closed and len(T['closed_edges']):
-            ce = T['closed_edges']
-            xs = np.stack([S['xy'][S['u'][ce], 0], S['xy'][S['v'][ce], 0], np.full(len(ce), np.nan)], 1).ravel()
-            ys = np.stack([S['xy'][S['u'][ce], 1], S['xy'][S['v'][ce], 1], np.full(len(ce), np.nan)], 1).ravel()
-            fig.add_trace(go.Scattergl(x=xs, y=ys, mode='lines', line=dict(color='#00e5ff', width=4),
-                                       name='Cerrado (Skyway)', hoverinfo='skip'))
-        for k in (D.PREP, D.WAIT, D.MOVE, D.FIRE, D.SAFE):
-            m = (st_ == k) & sel
-            fig.add_trace(go.Scattergl(x=px[m], y=py[m], mode='markers', name=D.STATE_NAMES[k],
-                                       marker=dict(size=4 if k != D.MOVE else 5, color=D.STATE_COLORS[k],
-                                                   opacity=.8 if k != D.MOVE else 1),
-                                       hoverinfo='skip'))
-        ex = S['xy'][S['exits']]
-        fig.add_trace(go.Scatter(x=ex[:, 0], y=ex[:, 1], mode='markers+text', text=['Salida'] * len(ex),
-                                 textposition='top center', name='Salidas del dominio',
-                                 marker=dict(symbol='star', size=14, color='#ffd400', line=dict(width=1, color='black'))))
-        fig.update_layout(title=None)
-        base_layout(fig, view_for(zone))
-        holder_map.plotly_chart(fig, width='stretch', key=f'm{time.time_ns()}')
-        w = T['g_people']
-        tot = w.sum()
-        cols = holder_k.columns(6)
-        cols[0].metric('Hora', f'{(6 * 60 + 25 + t) // 60:02d}:{(6 * 60 + 25 + t) % 60:02d}')
-        for c_, k in zip(cols[1:], (D.PREP, D.WAIT, D.MOVE, D.SAFE, D.FIRE)):
-            n = w[st_ == k].sum()
-            c_.metric(D.STATE_NAMES[k], f'{n:,.0f}', f'{100 * n / tot:.1f}%', delta_color='off')
+    def toggle():
+        if not st.session_state.playing and st.session_state.t_anim >= 480:
+            st.session_state.t_anim = 0
+        st.session_state.playing = not st.session_state.playing
 
-    draw(t)
-    if play:
-        for tt in range(t, 481, step):
-            draw(tt)
-            time.sleep(.05)
-        st.session_state.t_anim = 480
+    st.button('⏸ Pausar' if st.session_state.playing else '▶ Reproducir', on_click=toggle)
 
-    h = go.Figure()
-    h.add_trace(go.Scatter(x=T['hist_t'], y=T['hist_safe'], name='Personas a salvo (acumulado)', line=dict(color='#1db954')))
-    h.add_trace(go.Scatter(x=T['hist_t'], y=T['hist_exposed'], name='Personas expuestas (acumulado)', line=dict(color='#e5134b')))
-    h.add_trace(go.Scatter(x=T['hist_t'], y=T['hist_qpeople'], name='Personas en cola', line=dict(color='#7b2cbf')))
-    h.add_vline(x=t, line_dash='dash')
-    h.update_layout(height=300, margin=dict(t=10, b=30), xaxis_title='min desde la ignición',
-                    yaxis_title='personas ponderadas', legend=dict(orientation='h'))
-    st.plotly_chart(h, width='stretch')
+    # Fragmento temporizado: solo se re-ejecuta este bloque y el gráfico conserva su llave,
+    # así el mapa se actualiza en el sitio (sin remontarse ni parpadear).
+    @st.fragment(run_every=0.6 if st.session_state.playing else None)
+    def player():
+        if st.session_state.playing:
+            st.session_state.t_anim = min(480, st.session_state.t_anim + step)
+        t = st.slider('Minuto desde la ignición (06:25 hora local)', 0, 480, key='t_anim')
+        def draw(t):
+            px, py, st_ = D.positions_at(S, T, fire_rep, t)
+            fig = go.Figure()
+            if show_fire:
+                fig.add_trace(fire_trace(fire_rep, t))
+            if show_closed and len(T['closed_edges']):
+                ce = T['closed_edges']
+                xs = np.stack([S['xy'][S['u'][ce], 0], S['xy'][S['v'][ce], 0], np.full(len(ce), np.nan)], 1).ravel()
+                ys = np.stack([S['xy'][S['u'][ce], 1], S['xy'][S['v'][ce], 1], np.full(len(ce), np.nan)], 1).ravel()
+                fig.add_trace(go.Scattergl(x=xs, y=ys, mode='lines', line=dict(color='#00e5ff', width=4),
+                                           name='Cerrado (Skyway)', hoverinfo='skip'))
+            for k in (D.PREP, D.WAIT, D.MOVE, D.FIRE, D.SAFE):
+                m = (st_ == k) & sel
+                fig.add_trace(go.Scattergl(x=px[m].astype(np.float32), y=py[m].astype(np.float32), mode='markers', name=D.STATE_NAMES[k],
+                                           marker=dict(size=4 if k != D.MOVE else 5, color=D.STATE_COLORS[k],
+                                                       opacity=.8 if k != D.MOVE else 1),
+                                           hoverinfo='skip'))
+            ex = S['xy'][S['exits']]
+            fig.add_trace(go.Scatter(x=ex[:, 0], y=ex[:, 1], mode='markers+text', text=['Salida'] * len(ex),
+                                     textposition='top center', name='Salidas del dominio',
+                                     marker=dict(symbol='star', size=14, color='#ffd400', line=dict(width=1, color='black'))))
+            fig.update_layout(title=None)
+            base_layout(fig, view_for(zone))
+            st.plotly_chart(fig, width='stretch', key='anim_map')
+            w = T['g_people']
+            tot = w.sum()
+            cols = st.columns(6)
+            cols[0].metric('Hora', f'{(6 * 60 + 25 + t) // 60:02d}:{(6 * 60 + 25 + t) % 60:02d}')
+            for c_, k in zip(cols[1:], (D.PREP, D.WAIT, D.MOVE, D.SAFE, D.FIRE)):
+                n = w[st_ == k].sum()
+                c_.metric(D.STATE_NAMES[k], f'{n:,.0f}', f'{100 * n / tot:.1f}%', delta_color='off')
+
+
+        draw(t)
+        h = go.Figure()
+        h.add_trace(go.Scatter(x=T['hist_t'], y=T['hist_safe'], name='Personas a salvo (acumulado)', line=dict(color='#1db954')))
+        h.add_trace(go.Scatter(x=T['hist_t'], y=T['hist_exposed'], name='Personas expuestas (acumulado)', line=dict(color='#e5134b')))
+        h.add_trace(go.Scatter(x=T['hist_t'], y=T['hist_qpeople'], name='Personas en cola', line=dict(color='#7b2cbf')))
+        h.add_vline(x=t, line_dash='dash')
+        h.update_layout(height=300, margin=dict(t=10, b=30), xaxis_title='min desde la ignición',
+                        yaxis_title='personas ponderadas', legend=dict(orientation='h'))
+        st.plotly_chart(h, width='stretch', key='anim_hist')
+        if st.session_state.playing and st.session_state.t_anim >= 480:
+            st.session_state.playing = False
+            st.rerun(scope='app')
+
+    player()
     m = T['meta']['metrics']
     st.caption(f"Resultado final de esta corrida: {m['people_safe']:,.0f} de {m['people_total']:,.0f} personas llegaron a una salida "
                f"({100 * m['people_safe_before_fire'] / m['people_total']:.1f}% antes del fuego); "
@@ -223,7 +244,7 @@ elif page.startswith('🛣️'):
         tx, ty = D.town_xy()[town]
         gx, gy = S['xy'][T['g_node'], 0], S['xy'][T['g_node'], 1]
         near = np.flatnonzero((np.hypot(gx - tx, gy - ty) < radius * 1000))
-        has = np.isin(near, np.unique(T['tr_group']))
+        has = T['moved'][near]
         pool = near[has]
         if len(pool) == 0:
             st.info('Ningún grupo de esta zona se movió en esta corrida.')
@@ -236,7 +257,7 @@ elif page.startswith('🛣️'):
                 x=np.stack([S['xy'][S['u'][ce], 0], S['xy'][S['v'][ce], 0], np.full(len(ce), np.nan)], 1).ravel(),
                 y=np.stack([S['xy'][S['u'][ce], 1], S['xy'][S['v'][ce], 1], np.full(len(ce), np.nan)], 1).ravel(),
                 mode='lines', line=dict(color='#00e5ff', width=4), name='Cerrado por política', hoverinfo='skip'))
-        rows = []
+        rows, shown = [], set()
         palette = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#008080', '#9a6324', '#800000',
                    '#808000', '#000075', '#f032e6', '#469990']
         for i, gi in enumerate(pick):
@@ -249,11 +270,16 @@ elif page.startswith('🛣️'):
             fin = T['g_finish'][gi]
             status = 'llegó a salida' if fin >= 0 else ('alcanzado por fuego' if T['g_state'][gi] == 2 else 'sin llegar en 480 min')
             waits = float(np.sum(np.maximum(0, s_[1:] - en[:-1]))) + max(0, float(s_[0] - T['g_ready'][gi]))
-            fig.add_trace(go.Scattergl(x=xs, y=ys, mode='lines', line=dict(width=3, color=palette[i % len(palette)]),
-                                       name=f'g{gi} · {status}', opacity=.9))
+            kind = 'llegó a una salida' if fin >= 0 else ('alcanzado por el fuego' if T['g_state'][gi] == 2 else 'sin llegar en 480 min')
+            color = {'llegó a una salida': '#1db954', 'alcanzado por el fuego': '#e5134b', 'sin llegar en 480 min': '#ff9f1c'}[kind]
+            fig.add_trace(go.Scattergl(x=xs, y=ys, mode='lines', line=dict(width=3, color=color), opacity=.9,
+                                       name=kind, legendgroup=kind, showlegend=kind not in shown,
+                                       hovertemplate=f'Grupo {gi}: {kind}<extra></extra>'))
+            shown.add(kind)
             fig.add_trace(go.Scatter(x=[S['xy'][T['g_node'][gi], 0]], y=[S['xy'][T['g_node'][gi], 1]], mode='markers',
-                                     marker=dict(size=9, color=palette[i % len(palette)], line=dict(width=1.5, color='white')),
-                                     showlegend=False, hovertext=f'Grupo {gi}: {T["g_people"][gi]:.1f} personas'))
+                                     marker=dict(size=9, color=color, line=dict(width=1.5, color='white')),
+                                     legendgroup=kind, showlegend=False,
+                                     hovertext=f'Grupo {gi}: {T["g_people"][gi]:.1f} personas · {kind}'))
             rows.append(dict(grupo=int(gi), personas=round(float(T['g_people'][gi]), 2), sale_a_min=round(float(T['g_ready'][gi]), 1),
                              tramos=len(e), min_en_cola=round(waits, 1),
                              llega_min=round(float(fin), 1) if fin >= 0 else None, resultado=status,
@@ -261,9 +287,8 @@ elif page.startswith('🛣️'):
         ex = S['xy'][S['exits']]
         fig.add_trace(go.Scatter(x=ex[:, 0], y=ex[:, 1], mode='markers', name='Salidas del dominio',
                                  marker=dict(symbol='star', size=15, color='#ffd400', line=dict(width=1, color='black'))))
-        fig.add_trace(fire_trace(S['fire'][rep], 480, opacity=.35))
-        fig = base_layout(fig, view_for(town, radius_km=max(radius + 2, 6)), height=760)
-        fig.update_layout(legend=dict(orientation='v', x=1.0, y=1, font=dict(size=10)))
+        fig.add_trace(fire_trace(S['fire'][rep], 480, opacity=.35, colorbar=False))
+        fig = base_layout(fig, view_for(town, radius_km=max(radius + 2, 6)), height=700)
         st.plotly_chart(fig, width='stretch')
         df = pd.DataFrame(rows)
         st.dataframe(df, width='stretch', hide_index=True)
@@ -291,8 +316,8 @@ elif page.startswith('🛣️'):
                 seq = [names[0]] + [n for a, n in zip(names, names[1:]) if n != a]
                 st.write('**Calles recorridas:** ' + ' → '.join(seq))
     with tab_b:
-        w = T['g_people'][T['tr_group']]
-        use = np.bincount(T['tr_edge'], weights=w, minlength=len(S['u']))
+        use = np.zeros(len(S['u']))
+        use[:len(T['edge_people'])] = T['edge_people']
         peak = T['edge_peak'] / np.maximum(S['edge_cap'], 1)
         metric = st.radio('Colorear por', ['Personas que transitaron', 'Ocupación máxima / capacidad'], horizontal=True)
         val = use if metric.startswith('Pers') else peak
@@ -304,7 +329,7 @@ elif page.startswith('🛣️'):
         else:
             edges = [0, .25, .5, .75, .999, 1e9]
             cols = ['#b2dfdb', '#ffe08a', '#fb8500', '#e5383b', '#6a040f']
-        fig = go.Figure(fire_trace(S['fire'][rep], 480, .3))
+        fig = go.Figure(fire_trace(S['fire'][rep], 480, .3, colorbar=False))
         for lo, hi, c in zip(edges[:-1], edges[1:], cols):
             m = seen[(val[seen] >= lo) & (val[seen] < hi)]
             if not len(m):
@@ -317,11 +342,10 @@ elif page.startswith('🛣️'):
         zone = st.selectbox('Zona', ['Todo el dominio'] + list(D.TOWNS), key='zc')
         fig = base_layout(fig, view_for(zone))
         st.plotly_chart(fig, width='stretch')
-        top = pd.DataFrame({'calle': S['edge_name'], 'personas': use, 'ocupación máx./cap.': peak})
-        top = top[top.calle != ''].groupby('calle').agg(personas=('personas', 'sum'),
-                                                       sat=('ocupación máx./cap.', 'max')).sort_values('personas', ascending=False).head(12)
-        top.columns = ['Personas·tramo transitadas', 'Máx. ocupación/capacidad']
-        st.write('**Calles más usadas (suma sobre sus tramos)**')
+        top = pd.DataFrame({'calle': S['edge_name'], 'personas': use, 'sat': peak})
+        top = top[top.calle != ''].groupby('calle').agg(personas=('personas', 'max'), sat=('sat', 'max'))             .sort_values('personas', ascending=False).head(12)
+        top.columns = ['Personas·cruces en su tramo más cargado', 'Máx. ocupación/capacidad']
+        st.write('**Calles más usadas**')
         st.dataframe(top.round(2), width='stretch')
 
 # ================================================================= 3) incendio
@@ -359,7 +383,7 @@ elif page.startswith('🔥'):
                                  hovertext=obs.hora_local + ' (min ' + obs.minuto.astype(str) + ')'))
     base_layout(fig, view_for(zone))
     st.plotly_chart(fig, width='stretch')
-    area = np.stack([((f >= 0)[None] & (f[None] <= np.arange(481)[:, None, None])).sum((1, 2)) for f in fire])
+    area = burned_area(fire)
     band = go.Figure()
     for r_ in range(30):
         band.add_trace(go.Scatter(x=np.arange(481), y=area[r_], mode='lines', line=dict(width=1, color='rgba(229,19,75,.25)'), showlegend=False, hoverinfo='skip'))
@@ -368,7 +392,7 @@ elif page.startswith('🔥'):
     band.update_layout(height=320, xaxis_title='min desde la ignición', yaxis_title='área quemada (ha, celdas de 1 ha)',
                        margin=dict(t=10), legend=dict(orientation='h'))
     st.plotly_chart(band, width='stretch')
-    st.caption('Cada línea gris es una de las 30 réplicas del autómata celular; la variabilidad refleja la estocasticidad de la propagación.')
+    st.caption('Cada línea tenue es una de las 30 réplicas del autómata celular; la variabilidad refleja la estocasticidad de la propagación.')
     v = json.loads((D.ROOT / 'salidas/fuego/validacion.json').read_text())['validacion']
     k = st.columns(4)
     k[0].metric('Error absoluto medio (validación)', f"{v['mae_min']['media']:.0f} min")
@@ -421,7 +445,7 @@ elif page.startswith('📊'):
     fig2.add_trace(go.Bar(x=names, y=means, marker_color=[col[s] for s in pdv],
                           error_y=dict(type='data', symmetric=False, array=np.array(hi) - np.array(means), arrayminus=np.array(means) - np.array(lo)),
                           text=[f'{m:+.2f} pp' for m in means], textposition='outside'))
-    fig2.update_layout(height=380, yaxis_title='Δ puntos porcentuales de personas seguras antes del fuego', margin=dict(t=10))
+    fig2.update_layout(height=380, yaxis_title='Δ pp seguras antes del fuego', margin=dict(t=10))
     st.plotly_chart(fig2, width='stretch')
     st.warning('El aumento de capacidad en una salida **reduce** la fracción segura (~−1.6 pp). El repositorio documenta que no se aisló '
                'el mecanismo; no debe leerse como que más capacidad perjudica en general. Todos los parámetros de evacuación son hipotéticos.')

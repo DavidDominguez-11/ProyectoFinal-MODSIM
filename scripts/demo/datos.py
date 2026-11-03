@@ -59,20 +59,38 @@ def available_runs():
     """Réplicas precalculadas: {(escenario, réplica): ruta}."""
     out = {}
     for p in sorted(DEMO.glob('*_r*.npz')):
+        if '.cache' in p.name:
+            continue
         s, _, r = p.stem.rpartition('_r')
         out[(s, int(r))] = p
     return out
 
 
 def load_traj(path):
-    with np.load(path) as d:
-        t = {k: d[k] for k in d.files}
+    """Carga una réplica; la primera vez guarda una caché ordenada y sin comprimir (carga ~10x más rápida)."""
+    path = Path(path)
+    cache = path.with_suffix('.cache2.npz')
+    if cache.exists() and cache.stat().st_mtime >= path.stat().st_mtime:
+        with np.load(cache) as d:
+            t = {k: d[k] for k in d.files}
+    else:
+        with np.load(path) as d:
+            t = {k: d[k] for k in d.files}
+        order = np.argsort(t['tr_group'], kind='stable')  # cada grupo conserva su orden temporal
+        for k in ('tr_group', 'tr_edge', 'tr_start', 'tr_end', 'tr_outcome'):
+            t[k] = t[k][order]
+        # La historia trae un punto por evento (millones): se reduce a ~1000 puntos para graficar.
+        n_hist = len(t['hist_t'])
+        keep = np.unique(np.linspace(0, n_hist - 1, 1000).astype(int))
+        for k in [k for k in t if k.startswith('hist_')]:
+            t[k] = t[k][keep]
+        t['moved'] = np.zeros(len(t['g_people']), bool)
+        t['moved'][t['tr_group']] = True
+        t['edge_people'] = np.bincount(t['tr_edge'], weights=t['g_people'][t['tr_group']],
+                                       minlength=int(t['tr_edge'].max()) + 1).astype(np.float32)
+        np.savez(cache, **t)
     t['meta'] = json.loads(str(t['meta']))
-    order = np.argsort(t['tr_group'], kind='stable')  # ya viene ordenado por inicio
-    for k in ('tr_group', 'tr_edge', 'tr_start', 'tr_end', 'tr_outcome'):
-        t[k] = t[k][order]
-    rng = np.random.default_rng(7)
-    t['jitter'] = rng.normal(0, 35, (len(t['g_people']), 2)).astype(np.float32)
+    t['jitter'] = np.random.default_rng(7).normal(0, 35, (len(t['g_people']), 2)).astype(np.float32)
     return t
 
 
