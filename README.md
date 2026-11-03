@@ -1,50 +1,143 @@
-# ProyectoFinal-MODSIM
+# Simulación de incendio y evacuación: Camp Fire 2018
 
-Proyecto final de Modelación y Simulación: simulación híbrida de propagación de incendios forestales y evacuación.
+Proyecto final de **Modelación y Simulación**, Universidad del Valle de Guatemala, noviembre de 2026.
 
-## Documentos
+Modelo híbrido que acopla la propagación del fuego con la evacuación de la población en el Camp Fire (California, 8 de noviembre de 2018). Sirve para comparar escenarios de respuesta, por ejemplo avisar antes o perder una carretera.
 
-- [Avance parcial y plan técnico](docs/avance_parcial.md)
-- [Auditoría de datos y resultados reproducibles](docs/auditoria_datos.md)
-- [Cronología inicial de avisos con fuentes NIST](docs/cronologia_base.md)
-- [Prototipo ejecutable y resultados sintéticos](docs/prototipo_avance.md)
-- [Módulo de fuego: datos, modelo, calibración y validación](docs/modelo_fuego.md)
-- [Pendientes del equipo: qué le toca a cada quien](docs/pendientes_equipo.md)
-- [Instrucciones del proyecto](docs/proyecto_final_modelacionysimulacion.md)
-- [Indicaciones de Canvas](docs/proyecto.md)
-- [Evidencia de aprobación](docs/aprobacion.pdf)
+| Entregable          | Enlace                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| Video demostrativo  | https://youtu.be/TN2KcyJn2pY                                                           |
+| Informe final (PDF) | [entregables/Informe_Final_MODSIM.pdf](entregables/Informe_Final_MODSIM.pdf)           |
+| Presentación (PDF)  | [entregables/Presentacion_Final_MODSIM.pdf](entregables/Presentacion_Final_MODSIM.pdf) |
 
-## Estado
+---
 
-**Parte 2 completada en implementación y experimentos comparativos:** terminaron las 120 corridas (30 por cada uno de cuatro escenarios, 30 fuegos distintos por escenario y preparación pareada), con cuatro procesos y horizonte de 480 min. Se conservaron 50314 grupos / 42388.94983696542 personas ponderadas. La producción terminó con código 0 y `FULL_PARALLEL_120_REPLICA_CHECK_PASS` en **17849.23 s (4 h 57 min 29 s)**. La suite de **63 pruebas**, la verificación independiente de código/concurrencia y entorno, y las comprobaciones completas de resultados aprobaron.
+## El problema
 
-El módulo de fuego tiene calibración, validación y sensibilidad documentadas; **eso no valida la evacuación**. Esta combina población residencial y carreteras reales con respuesta **hipotética**, no reconstrucción de políticas históricas ni predicción de seguridad/mortalidad. Bajo estos supuestos, la alerta temprana mejora la fracción segura antes del fuego ~3.18 puntos porcentuales; cerrar Skyway la reduce ~22.09 pp y aumentar capacidad en una salida la reduce ~1.61 pp. El mecanismo de este último efecto no se aisló: **no permite recomendar políticas ni afirmar que más capacidad siempre perjudica**. Los IC, colas, tiempos condicionales y limitaciones están en [el informe de evacuación](docs/modelo_evacuacion.md#producción-completada-resultados-para-el-informe-s27-y-s29).
+En un incendio que alcanza zonas habitadas ocurren tres cosas a la vez: el fuego avanza, la población recibe la alerta y se prepara, y todos intentan salir por pocas carreteras. El Camp Fire llegó a Paradise en aproximadamente hora y media.
 
-Resultados compactos versionados: [replicas.csv](salidas/evacuacion_final/replicas.csv), [summary.json](salidas/evacuacion_final/summary.json), [métricas](salidas/evacuacion_final/metrics.png), [CDF condicional](salidas/evacuacion_final/cdf.png) y [colas](salidas/evacuacion_final/queues.png). Están listos para integrar en la **Parte 3**, aún pendiente: evidencia histórica de avisos/cierres/refugios, informe PDF, registro de IA, diapositivas y video. Los documentos del avance parcial conservan el estado de aquella entrega; no describen el estado actual.
+**Pregunta:** ¿cuántas personas logran salir antes de que llegue el fuego si cambia la hora de la alerta, se pierde una ruta o se amplía una salida?
 
-- [Evacuación: modelo, supuestos, métricas y escenarios](docs/modelo_evacuacion.md)
-- [Construcción y auditoría de la red vial](docs/red_vial.md)
-- [Motor de evacuación por eventos](docs/motor_evacuacion.md)
-- [Entorno reproducible](docs/entorno_evacuacion.md)
+## La solución
 
-## Reproducir evacuación
+| Componente    | Técnica                                                  | Detalle                                                                                                                                                                                         |
+| ------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fuego         | Autómata celular estocástico (Alexandridis et al., 2008) | Celdas de 100 m y pasos de 1 min. La ignición depende del combustible, la pendiente y el viento. Incluye brasas que saltan delante del frente. Calibrado y validado con observaciones del NIST. |
+| Evacuación    | Agentes y eventos discretos                              | 50 314 grupos sobre la red vial real (TIGER/Line 2018). Colas por capacidad, cierres de vías por fuego y búsqueda de rutas con Dijkstra.                                                        |
+| Acople        | Fuego → evacuación                                       | Una vía se cierra en el minuto en que el fuego alcanza cualquiera de sus celdas.                                                                                                                |
+| Incertidumbre | Monte Carlo                                              | 30 simulaciones por escenario, con fuegos pareados entre escenarios e intervalos de confianza del 95 %.                                                                                         |
 
-Desde la raíz del repositorio, con Python 3.12 y uv:
+## Resultados principales
 
-```bash
-uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python -r requirements-evacuacion.txt
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python scripts/evacuacion/red_vial.py --download
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python scripts/evacuacion/experimentos.py --smoke --replicas 2 --scenario base --workers 2 --output salidas/evacuacion_smoke_parallel2_reproduccion
-# Solo después de medir RAM/rendimiento y verificar equivalencia:
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python scripts/evacuacion/experimentos.py --replicas 30 --workers 2 --output salidas/evacuacion_reproduccion
+**Fuego (validación con 118 zonas no usadas en la calibración):**
+
+- El fuego entra a Paradise en el minuto 110. Según el NIST, en el minuto 84.
+- Quema el 12 % del terreno que en la realidad nunca ardió. Un modelo radial simple quema el 100 %.
+- Sin brasas, el fuego llega a Paradise 71 minutos más tarde.
+
+**Evacuación (120 simulaciones):**
+
+| Escenario                   | Personas que salen antes del fuego |
+| --------------------------- | ---------------------------------: |
+| Base (alerta 07:50)         |                             42,9 % |
+| Alerta 30 min antes         |                   46,1 % (+3,2 pp) |
+| Skyway cerrado              |                  20,8 % (−22,1 pp) |
+| Más capacidad en una salida |                   41,3 % (−1,6 pp) |
+
+**Límites:** la hora de alerta, la preparación y las capacidades de evacuación son supuestos, no datos históricos. Los resultados sirven para comparar escenarios, no para predecir lo que ocurrió.
+
+---
+
+## Estructura
+
+```
+config/              Dominio, parámetros calibrados del fuego y escenarios de evacuación
+data/procesado/      Grilla, observaciones NIST limpias y viento (versionados)
+scripts/fuego/       f1 a f8: datos, modelo, calibración, validación y sensibilidad
+scripts/evacuacion/  Red vial, motor de eventos y experimentos
+scripts/demo_video.py  Demostración rápida (3 s)
+salidas/fuego/       Llegada del fuego por simulación, figuras y validación
+salidas/evacuacion_final/  Resultados de las 120 simulaciones y figuras
+tests/               63 pruebas automáticas
+docs/                Documentación técnica de cada módulo
+entregables/         Informe y presentación
 ```
 
-`--workers N` admite únicamente enteros 1..4 (predeterminado 1, secuencial). Con N>1 usa procesos `spawn`, no threads: la invocación del script es segura; quien importe `run_experiments(..., workers=N)` debe llamarlo bajo `if __name__ == '__main__':` desde un módulo importable, no desde un notebook/REPL. Cada proceso recibe las entradas validadas una vez y conserva su propia memoria; no elegir automáticamente los 15 núcleos. La ruta rápida muestra dos workers; cuatro también están soportados y se usaron en producción tras medir. En el equipo de **24 GiB**, el ensayo de dos procesos reportó 2180825088 bytes de RSS máximo: se presupuestó conservadoramente `4 × 2180825088 = 8723300352 bytes` más padre y reserva. El benchmark compacto secuencial midió 1229602816 bytes (~1.23 GB) con igualdad exacta frente al modo completo; la réplica real r0 paralela también coincidió. En producción, `/usr/bin/time -l` reportó 5048844288 bytes de RSS máximo, **no la suma de todos los procesos ni su huella conjunta**. No trasladar ese presupuesto a otra máquina sin medir. Las variables de la orden limitan BLAS/OMP sin cambiar el entorno global ni agregar dependencias.
+## Cómo correrlo
 
-Cada réplica r usa RNG local PCG64 con semilla `2000+r` y fuego `[r]`; los escenarios regeneran la misma preparación independientemente del proceso/orden de llegada. Solo el padre escribe CSV/JSON/figuras, en orden réplica–escenario, con hasta `2*N` trabajos pendientes. Ante error/Ctrl-C cancela pendientes y espera los activos para no dejar hijos huérfanos; puede demorar en salir. Los productos numéricos no dependen de N; solo `metadata.worker_count` cambia. `salidas/evacuacion` contiene parciales del lote secuencial detenido; `salidas/evacuacion_final` contiene la producción completada: **no borrar ni sobrescribir ninguno**. Reproducir siempre en un directorio nuevo o vacío, como los de las órdenes anteriores.
+**Requisitos:** Python 3.12 (también funciona con 3.11) e internet solo para descargar los datos crudos.
 
-La descarga corresponde a TIGER/Line 2018 de Butte County. El resto de las entradas de fuego y población ya está versionado. La ejecución completa produce 30 réplicas pareadas por cada uno de cuatro escenarios (120 corridas), con semillas, métricas, IC y figuras. Usá un directorio de salida nuevo o vacío; el programa rechaza sobrescribir evidencia existente. Para probar rendimiento sin resultados finales, agregá `--smoke --replicas 1 --scenario base --output salidas/evacuacion_smoke_reproduccion` en lugar de los argumentos de la corrida completa.
+### 1. Instalar
 
-`data/procesado/red_vial.json`, las pruebas smoke y las trayectorias/distribuciones voluminosas se regeneran y no se versionan. En particular, `distribution.csv` (~156 MB) y el ejemplo acotado (~200 KB) están ignorados por Git: no depender de ellos como archivos persistentes del repositorio. `replicas.csv`, `summary.json` y las tres figuras finales son los productos compactos versionados. Consultá [modelo_evacuacion.md](docs/modelo_evacuacion.md) para todas las opciones CLI (`--help`), arquitectura, restricciones de spawn/cancelación de Python 3.12 y resultados con IC.
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-evacuacion.txt
+```
+
+macOS / Linux:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-evacuacion.txt
+```
+
+En los comandos siguientes, en macOS o Linux cambien `.venv\Scripts\python` por `.venv/bin/python` y `\` por `/`.
+
+### 2. Verificar y ver el modelo funcionando
+
+```powershell
+.venv\Scripts\python -m unittest discover -s tests -v   # 63 pruebas, ~1 min
+.venv\Scripts\python scripts\demo_video.py              # 3 simulaciones de fuego + resumen de evacuación
+```
+
+Esto funciona sin descargar nada, porque los datos procesados y los resultados ya están en el repositorio.
+
+### 3. Reproducir todo desde cero
+
+**Fuego** (unos 10 min en total):
+
+```powershell
+.venv\Scripts\python scripts\fuego\f1_descargar_capas.py      # descarga combustible, elevación, población y perímetro
+.venv\Scripts\python scripts\fuego\f2_preparar_grilla.py
+.venv\Scripts\python scripts\fuego\f3_observaciones_nist.py   # descarga y limpia observaciones NIST
+.venv\Scripts\python scripts\fuego\f4_viento.py               # descarga viento ERA5
+.venv\Scripts\python scripts\fuego\f6_calibrar.py             # ~5 min
+.venv\Scripts\python scripts\fuego\f7_validar_exportar.py     # 30 simulaciones + validación
+.venv\Scripts\python scripts\fuego\f8_sensibilidad.py         # ~2,5 min
+```
+
+**Evacuación** (las 120 simulaciones tardaron ~5 h con 4 procesos):
+
+```powershell
+.venv\Scripts\python scripts\evacuacion\red_vial.py --download
+.venv\Scripts\python scripts\evacuacion\experimentos.py --smoke --replicas 1 --scenario base --output salidas\evacuacion_prueba
+.venv\Scripts\python scripts\evacuacion\experimentos.py --replicas 30 --workers 2 --output salidas\evacuacion_reproduccion
+```
+
+El segundo comando es una prueba corta (~7 min) y el tercero es la corrida completa. Usen siempre una carpeta de salida nueva: el programa no sobrescribe resultados existentes. Las opciones completas están en [docs/modelo_evacuacion.md](docs/modelo_evacuacion.md).
+
+Los datos crudos se guardan en `data/crudo/`, que no se sube al repositorio. Las semillas están registradas, así que los resultados se repiten exactamente.
+
+## Datos
+
+Todas las fuentes son públicas: LANDFIRE 2016 (combustible), USGS 3DEP (elevación), WorldPop 2018 (población), NIST TN 2135 apéndice F (observaciones del fuego), ERA5 vía Open-Meteo (viento), TIGER/Line 2018 (carreteras y límites) y el perímetro final de CAL FIRE vía NIFC.
+
+## Documentación
+
+- [Modelo del fuego](docs/modelo_fuego.md): datos, ecuaciones, calibración, validación y sensibilidad
+- [Modelo de evacuación](docs/modelo_evacuacion.md): escenarios, métricas y resultados con intervalos
+- [Red vial](docs/red_vial.md) y [motor de eventos](docs/motor_evacuacion.md)
+- [Instrucciones del curso](docs/proyecto_final_modelacionysimulacion.md) y [evidencia de aprobación del tema](docs/aprobacion.pdf)
+- Proceso: [avance parcial](docs/avance_parcial.md), [auditoría de datos](docs/auditoria_datos.md), [cronología de avisos](docs/cronologia_base.md), [prototipo sintético](docs/prototipo_avance.md) y [división del trabajo](docs/pendientes_equipo.md)
+
+El registro de uso de inteligencia artificial está en la sección 5.2 del informe.
+
+## Referencias principales
+
+1. Maranghides, A., et al. (2021). _A case study of the Camp Fire: Fire progression timeline_ (NIST TN 2135). https://doi.org/10.6028/NIST.TN.2135
+2. Maranghides, A., et al. (2023). _A case study of the Camp Fire: Notification, evacuation, traffic, and temporary refuge areas_ (NIST TN 2252). https://doi.org/10.6028/NIST.TN.2252
+3. Alexandridis, A., Vakalis, D., Siettos, C. I., & Bafas, G. V. (2008). A cellular automata model for forest fire spread prediction. _Applied Mathematics and Computation, 204_(1), 191–201.
+4. Dijkstra, E. W. (1959). A note on two problems in connexion with graphs. _Numerische Mathematik, 1_, 269–271.
+5. Harris, C. R., et al. (2020). Array programming with NumPy. _Nature, 585_, 357–362.
