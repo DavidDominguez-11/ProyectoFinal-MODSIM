@@ -101,7 +101,7 @@ def _validate(network, groups, fire, horizon, closed_edges):
 
 
 def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=None,
-             retain_details=True):
+             retain_details=True, trace_group_ids=None):
     """Simular sin mutar entradas; ver docs/motor_evacuacion.md para el contrato."""
     try:
         nodes, edges, destinations, node_fire, edge_fire, origin_fire = _validate(
@@ -111,6 +111,9 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
     states = [dict(g, state='preparing', destination=None, finish_min=None,
                    exposed=False, edge=None, queue_since=None, ticket=None,
                    traversal=None, blocked_edge=None, blocked_version=0) for g in groups]
+    traced_ids = set() if trace_group_ids is None else set(trace_group_ids)
+    if not traced_ids.issubset({g['id'] for g in groups}):
+        raise ValueError('trace_group_ids contiene grupos desconocidos')
     total = math.fsum(g['people'] for g in groups)
     incoming = defaultdict(list)
     for identifier in sorted(edges):
@@ -133,6 +136,7 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
     safe_people = temporary_people = exposed_people = 0.0
     dirty = set()
     events, history, traversals, evacuation_times = [], [], [], []
+    traced_traversals = []
     sequence = 0
     ticket = 0
     time = 0
@@ -339,9 +343,13 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
             peak[identifier] = max(peak[identifier], len(occupancy[identifier]))
             record = {'group': g['id'], 'edge': identifier, 'start_min': time,
                       'end_min': None, 'outcome': 'active'}
+            if g['id'] in traced_ids:
+                record['planned_end_min'] = time + edge['travel_min']
             traversal_records += 1
             if retain_details or len(traversals) < 100:
                 traversals.append(record)
+            if g['id'] in traced_ids:
+                traced_traversals.append(record)
             g.update(state='traveling', edge=identifier, traversal=record)
             event(time + edge['travel_min'], 2, 'arrival', (index, record))
         if dirty:
@@ -499,6 +507,7 @@ def simulate(network, groups, fire, horizon=480, closed_edges=None, *, progress=
                   capacity_invariant=all(peak[e] <= edges[e]['capacity'] for e in edges),
                   no_closed_edge_traversal=no_closed_edge_traversal,
                   destination_people=arrived, history=history, traversals=traversals,
+                  traced_traversals=traced_traversals,
                   evacuation_times=evacuation_times,
                   groups=[{key: g[key] for key in ('id', 'people', 'node', 'state', 'edge',
                                                   'destination', 'finish_min', 'exposed')}

@@ -27,6 +27,36 @@ Resultados compactos versionados: [replicas.csv](salidas/evacuacion_final/replic
 - [Motor de evacuación por eventos](docs/motor_evacuacion.md)
 - [Entorno reproducible](docs/entorno_evacuacion.md)
 
+## Demo visual de resultados
+
+El visor [demo_app.py](demo_app.py) explica el flujo técnico, permite recorrer cada réplica de fuego
+con un control de tiempo y compara los cuatro escenarios mediante las 120 filas publicadas. La página
+**Rutas y grupos** reproduce una réplica visual nueva del escenario base: muestra la red regenerada,
+36 grupos seleccionados de forma determinista, sus tramos iniciados y una historia compacta de colas,
+llegadas y exposición. La posición durante un tramo se interpola solo para dibujar el movimiento.
+Esta réplica visual **no es una de las 120 corridas publicadas**: el SHA-256 de la red vial regenerada
+difiere del registrado en producción. Cada cifra de esa vista se rotula como ilustrativa.
+
+El visor no descarga datos ni ejecuta simulaciones al navegar. Al abrirse comprueba forma, semillas,
+conservación, resumen y procedencia de los insumos. El archivo visual `salidas/demo_proceso.json`
+se generó aparte con [exportar_demo_proceso.py](scripts/evacuacion/exportar_demo_proceso.py).
+
+En Windows PowerShell, con Python 3.12 y uv:
+
+```powershell
+uv venv --python 3.12 .venv
+uv pip install --python .venv\Scripts\python.exe -r requirements-demo.txt
+.venv\Scripts\python.exe -m streamlit run demo_app.py --server.address 127.0.0.1
+```
+
+La app muestra explícitamente que los resultados de evacuación dependen de supuestos hipotéticos;
+también señala la discrepancia WorldPop y el límite de la partición espacial del fuego. La CDF
+publicada se muestra como figura, pues las llegadas exactas detalladas no se versionan.
+
+En **Rutas y grupos**, mueve el reloj de 0 a 480 minutos y elige un grupo para revisar sus tramos.
+Los contadores corresponden al último evento conservado hasta ese minuto; no se inventan eventos
+intermedios. Las rutas azules son recorridos de la muestra, no trayectorias históricas de residentes.
+
 ## Reproducir evacuación
 
 Desde la raíz del repositorio, con Python 3.12 y uv:

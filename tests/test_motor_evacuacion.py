@@ -24,6 +24,18 @@ def group(identifier='g', people=2.5, ready=0):
 
 
 class MotorTests(unittest.TestCase):
+    def test_selected_group_trace_retains_actual_traversal(self):
+        result = simulate(network(travel=2), [group('tracked'), group('other')],
+                          [[-1, -1]], horizon=5, retain_details=False,
+                          trace_group_ids={'tracked'})
+        self.assertEqual(len(result['traced_traversals']), 1)
+        trace = result['traced_traversals'][0]
+        self.assertEqual(trace['group'], 'tracked')
+        self.assertEqual(trace['start_min'], 0)
+        self.assertEqual(trace['end_min'], 2)
+        self.assertEqual(trace['planned_end_min'], 2)
+        self.assertEqual(trace['outcome'], 'arrived')
+
     def test_compact_equivalence_for_existing_public_behavior_cases(self):
         # Reutilizar las mismas entradas y aserciones de física, no otro motor de prueba.
         cases = [name for name in dir(self) if name.startswith('test_') and
