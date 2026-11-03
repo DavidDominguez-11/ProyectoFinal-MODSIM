@@ -28,6 +28,9 @@ class DemoBundle:
     arrivals: np.ndarray
     fire_seeds: np.ndarray
     population: np.ndarray
+    fuel_class: np.ndarray
+    elevation: np.ndarray
+    slope: np.ndarray
     perimeter: np.ndarray
     source_checks: dict[str, str]
 
@@ -109,11 +112,19 @@ def load_bundle(root: Path) -> DemoBundle:
 
     with np.load(paths["grid"], allow_pickle=False) as grid:
         population = np.asarray(grid["poblacion"], dtype=np.float64)
+        fuel_class = np.asarray(grid["clase"], dtype=np.int8)
+        elevation = np.asarray(grid["elevacion_m"], dtype=np.float64)
+        slope = np.asarray(grid["pendiente_grados"], dtype=np.float64)
         perimeter = np.asarray(grid["dentro_perimetro"], dtype=bool)
     with np.load(paths["fire"], allow_pickle=False) as fire:
         arrivals = np.asarray(fire["llegada_min"], dtype=np.int16)
         fire_seeds = np.asarray(fire["semillas"], dtype=np.int64)
     _require(population.shape == perimeter.shape == shape, "Grilla incompatible")
+    _require(fuel_class.shape == elevation.shape == slope.shape == shape,
+             "Capas SIG incompatibles")
+    _require(np.isfinite(elevation).all() and np.isfinite(slope).all() and
+             np.isin(fuel_class, [-1, 0, 1, 2, 3, 4, 5, 6]).all(),
+             "Combustible, elevación o pendiente inválidos")
     _require(arrivals.shape == (30, *shape) and fire_seeds.shape == (30,),
              "Se esperaban 30 réplicas de fuego sobre la grilla contratada")
     _require(np.isfinite(population).all() and (population >= 0).all(),
@@ -151,7 +162,7 @@ def load_bundle(root: Path) -> DemoBundle:
             _require(math.isclose(current, recorded, rel_tol=1e-10, abs_tol=1e-9),
                      f"CSV y resumen difieren para {scenario}/{key}")
     return DemoBundle(contract, config, domain, summary, replicas, arrivals,
-                      fire_seeds, population, perimeter, checks)
+                      fire_seeds, population, fuel_class, elevation, slope, perimeter, checks)
 
 
 def fire_snapshot(arrivals: np.ndarray, replica: int, minute: int) -> np.ndarray:

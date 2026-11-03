@@ -60,7 +60,10 @@ def main():
         end = next(g for g in result["groups"] if g["id"] == group["id"])
         records.append({"id": group["id"], "people": group["people"],
                         "origin_cell": group["origin_cell"], "origin_node": group["node"],
-                        "origin_xy": nodes[group["node"]], "ready_min": group["ready_min"],
+                        "origin_xy": nodes[group["node"]],
+                        "alert_min": group["alert_min"],
+                        "preparation_min": group["preparation_min"],
+                        "ready_min": group["ready_min"],
                         "final_state": end["state"], "final_node": end["node"],
                         "finish_min": end["finish_min"], "exposed_by_horizon": end["exposed"]})
     traversals = []
@@ -70,6 +73,14 @@ def main():
                            "planned_end_min": record["start_min"] + edge["travel_min"],
                            "from_xy": nodes[edge["u"]], "to_xy": nodes[edge["v"]],
                            "road_name": edge["name"]})
+    used_edges = {record["edge"] for record in traversals}
+    edge_details = {identifier: {"u": edges[identifier]["u"],
+                                 "v": edges[identifier]["v"],
+                                 "capacity_groups": edges[identifier]["capacity"],
+                                 "travel_min": edges[identifier]["travel_min"],
+                                 "road_name": edges[identifier]["name"]}
+                    for identifier in sorted(used_edges)}
+    connectivity = raw_network["metadata"]["connectivity"]
     # El campo histórico compacto contiene eventos reales seleccionados; no hay
     # una fila por cada minuto ni se interpolan contadores de personas.
     artifact = {"schema": "demo_process_replay", "version": 1,
@@ -82,10 +93,16 @@ def main():
                 "network_source": raw_network["metadata"]["source_url"],
                 "group_count": attachment["group_count"],
                 "people_total": attachment["people_total"],
+                "network_stats": {"nodes": len(raw_network["nodes"]),
+                                  "directed_edges": len(raw_network["edges"]),
+                                  "destinations": len(raw_network["destinations"]),
+                                  "components": connectivity["component_count"],
+                                  "nodes_without_exit": connectivity["nodes_without_exit"]},
                 "trace_selection": "36 índices equidistantes en el orden determinista de grupos; muestra, no todos",
                 "roads": roads, "exits": [{"node": d["node"], "xy": nodes[d["node"]]}
                                          for d in adapted["destinations"] if d["kind"] == "safe"],
                 "groups": records, "traversals": traversals,
+                "edge_details": edge_details,
                 "history": result["history"], "metrics": metrics,
                 "record_counts": result["detail_retention"],
                 "intervention": intervention}

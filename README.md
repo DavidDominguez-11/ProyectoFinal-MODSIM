@@ -27,19 +27,27 @@ Resultados compactos versionados: [replicas.csv](salidas/evacuacion_final/replic
 - [Motor de evacuación por eventos](docs/motor_evacuacion.md)
 - [Entorno reproducible](docs/entorno_evacuacion.md)
 
-## Demo visual de resultados
+## Demo para presentación en vivo
 
-El visor [demo_app.py](demo_app.py) explica el flujo técnico, permite recorrer cada réplica de fuego
-con un control de tiempo y compara los cuatro escenarios mediante las 120 filas publicadas. La página
-**Rutas y grupos** reproduce una réplica visual nueva del escenario base: muestra la red regenerada,
-36 grupos seleccionados de forma determinista, sus tramos iniciados y una historia compacta de colas,
-llegadas y exposición. La posición durante un tramo se interpola solo para dibujar el movimiento.
-Esta réplica visual **no es una de las 120 corridas publicadas**: el SHA-256 de la red vial regenerada
-difiere del registrado en producción. Cada cifra de esa vista se rotula como ilustrativa.
+El visor [demo_app.py](demo_app.py) abre directamente en un recorrido de **cuatro pantallas**, sin
+portada ni páginas repetidas:
 
-El visor no descarga datos ni ejecuta simulaciones al navegar. Al abrirse comprueba forma, semillas,
-conservación, resumen y procedencia de los insumos. El archivo visual `salidas/demo_proceso.json`
-se generó aparte con [exportar_demo_proceso.py](scripts/evacuacion/exportar_demo_proceso.py).
+1. **Territorio y fuego:** capas de combustible, elevación, población y fuego; vías vectoriales y
+   una celda con sus ocho vecinas de Moore.
+2. **Red y rutas:** conectividad, salidas y recorrido de un grupo sobre aristas dirigidas.
+3. **Eventos y colas:** entidades, capacidad vial, orden de eventos y espera.
+4. **Grupos y resultados:** ficha de un grupo y comparación principal de los cuatro escenarios.
+   La matriz de las 30 réplicas pareadas se activa solo si hay preguntas.
+
+El visor solo lee archivos locales y no simula al navegar. Fuego y barras de resultados proceden del
+lote final. Las rutas y las métricas de cola visibles proceden de **una réplica ilustrativa nueva**;
+incluye 36 grupos trazados y una red vial regenerada cuyo SHA-256 difiere del usado en las 120
+corridas finales. El archivo `salidas/demo_proceso.json` se generó con
+[exportar_demo_proceso.py](scripts/evacuacion/exportar_demo_proceso.py). La posición dentro de una
+vía se interpola únicamente para dibujar el movimiento. Los límites y supuestos se consultan desde
+el desplegable lateral **Procedencia y límites**.
+Al cargar verifica integridad y consistencia; entre movimientos del reloj reutiliza los datos
+verificados y los vuelve a cargar si cambia alguno de los archivos de entrada.
 
 En Windows PowerShell, con Python 3.12 y uv:
 
@@ -49,13 +57,10 @@ uv pip install --python .venv\Scripts\python.exe -r requirements-demo.txt
 .venv\Scripts\python.exe -m streamlit run demo_app.py --server.address 127.0.0.1
 ```
 
-La app muestra explícitamente que los resultados de evacuación dependen de supuestos hipotéticos;
-también señala la discrepancia WorldPop y el límite de la partición espacial del fuego. La CDF
-publicada se muestra como figura, pues las llegadas exactas detalladas no se versionan.
-
-En **Rutas y grupos**, mueve el reloj de 0 a 480 minutos y elige un grupo para revisar sus tramos.
-Los contadores corresponden al último evento conservado hasta ese minuto; no se inventan eventos
-intermedios. Las rutas azules son recorridos de la muestra, no trayectorias históricas de residentes.
+Para presentarlo, avanza por el menú de arriba abajo. En las tres primeras pantallas mueve el reloj;
+en la última muestra primero las barras y abre la matriz pareada solo si necesitas explicar la
+variación entre réplicas. Los recorridos azules son movimientos modelados de una muestra, no
+trayectorias históricas de residentes.
 
 ## Reproducir evacuación
 

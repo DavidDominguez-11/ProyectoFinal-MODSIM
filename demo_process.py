@@ -28,7 +28,13 @@ def load_process(root: Path, bundle) -> dict | None:
             (process["network_sha256"] == process["published_network_sha256"])):
         raise ValueError("Procedencia vial visual inconsistente")
     ids = {g["id"] for g in process["groups"]}
+    stats = process.get("network_stats", {})
+    if (stats.get("nodes") != 31670 or stats.get("directed_edges") != 64098 or
+            stats.get("destinations") != len(process.get("exits", [])) or
+            not process.get("edge_details")):
+        raise ValueError("Metadatos de la red visual incompletos")
     if len(ids) != 36 or any(t["group"] not in ids or
+                             t["edge"] not in process["edge_details"] or
                              t["start_min"] > t["end_min"] or
                              t["planned_end_min"] < t["end_min"] or
                              not 0 <= t["start_min"] <= t["end_min"] <= 480
