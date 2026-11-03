@@ -9,11 +9,6 @@ DEMO = ROOT / 'salidas' / 'demo'
 FINAL = ROOT / 'salidas' / 'evacuacion_final'
 X0, Y0, RES = 609500.0, 4413500.0, 100.0
 SHAPE = (205, 278)
-# Estados de visualización
-PREP, WAIT, MOVE, SAFE, FIRE = 0, 1, 2, 3, 4
-STATE_NAMES = {PREP: 'Preparándose', WAIT: 'En cola / esperando ruta', MOVE: 'En movimiento',
-               SAFE: 'A salvo (salió del dominio)', FIRE: 'Alcanzado por el fuego'}
-STATE_COLORS = {PREP: '#8e9aaf', WAIT: '#7b2cbf', MOVE: '#1f77ff', SAFE: '#1db954', FIRE: '#e5134b'}
 SCENARIO_LABELS = {'base': 'Base', 'early_alert': 'Alerta 30 min antes',
                    'skyway_closed': 'Cierre de Skyway', 'exit_capacity': 'Más capacidad en una salida'}
 # Ubicaciones aproximadas (lat, lon) para enfocar el mapa; no son datos del modelo.
@@ -92,47 +87,6 @@ def load_traj(path):
     t['meta'] = json.loads(str(t['meta']))
     t['jitter'] = np.random.default_rng(7).normal(0, 35, (len(t['g_people']), 2)).astype(np.float32)
     return t
-
-
-def positions_at(static, traj, fire_rep, t):
-    """Posición (x, y) y estado de cada grupo en el minuto t."""
-    xy = static['xy']
-    tg, te = traj['tr_group'], traj['tr_edge']
-    state = np.where(t < traj['g_ready'], PREP, WAIT).astype(np.int8)
-    node = traj['g_node'].copy()
-    px = xy[node, 0].astype(np.float64)
-    py = xy[node, 1].astype(np.float64)
-    started = np.flatnonzero(traj['tr_start'] <= t)
-    if started.size:
-        g = tg[started]
-        last = started[np.r_[g[1:] != g[:-1], True]]
-        lg, le = tg[last], te[last]
-        s, e, oc = traj['tr_start'][last], traj['tr_end'][last], traj['tr_outcome'][last]
-        u, v = static['u'][le], static['v'][le]
-        moving = (t < e) | (e < 0)
-        frac = np.clip((t - s) / np.maximum(e - s, 1e-6), 0, 1)
-        # Recorridos truncados por cierre/horizonte: la fracción real usa el tiempo nominal del tramo.
-        nominal = np.minimum(frac, (t - s) / np.maximum(static['edge_min'][le], 1e-6))
-        f = np.where(moving, np.clip(nominal, 0, 1), 1.0)
-        at_v = ~moving & (oc == 0)
-        end_node = np.where(at_v, v, u)
-        tx = np.where(moving, xy[u, 0] + (xy[v, 0] - xy[u, 0]) * f, xy[end_node, 0])
-        ty = np.where(moving, xy[u, 1] + (xy[v, 1] - xy[u, 1]) * f, xy[end_node, 1])
-        px[lg], py[lg] = tx, ty
-        node[lg] = np.where(moving, u, end_node)
-        state[lg] = np.where(moving, MOVE, WAIT)
-        # Si todavía no llegó la hora de salir (no ocurre tras un recorrido) se mantiene WAIT.
-    safe = (traj['g_finish'] >= 0) & (traj['g_finish'] <= t)
-    state[safe] = SAFE
-    # Alcanzado: el nodo donde está ya ardió y no está a salvo ni en movimiento.
-    rc = static['node_cell'][node]
-    burnt = fire_rep[rc[:, 0], rc[:, 1]]
-    hit = (burnt >= 0) & (burnt <= t) & ~safe & (state != MOVE)
-    state[hit] = FIRE
-    still = state != MOVE
-    px = px + np.where(still, traj['jitter'][:, 0], 0)
-    py = py + np.where(still, traj['jitter'][:, 1], 0)
-    return px, py, state
 
 
 def group_path(static, traj, gidx):

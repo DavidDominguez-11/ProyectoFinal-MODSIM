@@ -9,7 +9,7 @@ from plotly.subplots import make_subplots
 from scipy import stats
 
 from scripts.demo import datos as D
-from scripts.demo.ui import XC, YC, banner, base_layout, pick_run, view_for
+from scripts.demo.ui import XC, YC, base_layout, pick_run, view_for
 from scripts.demo.ui_extra import lazy_tabs
 
 PURPLE = '#8e44ad'
@@ -19,17 +19,6 @@ SC_COLOR = {'base': '#6c757d', 'early_alert': '#1db954', 'skyway_closed': '#e513
 
 
 def render(S, runs):
-    banner('agent', '4', 'Agentes y corridas múltiples (Monte Carlo)',
-           'Cada <b>agente</b> es un grupo con atributos propios (origen, peso, demora, estado) que toma decisiones '
-           'locales; por eso la población es <b>heterogénea</b>. Como la preparación y el fuego son aleatorios, un solo '
-           'resultado no basta: se ejecutan <b>corridas múltiples</b> con semillas registradas y se reportan medias e '
-           'intervalos de confianza.',
-           '<code>scripts/evacuacion/experimentos.py</code>: <code>make_groups()</code> (agentes) y '
-           '<code>run_experiments()</code> (30 réplicas × 4 escenarios, semillas pareadas)',
-           ['<b>Agente = grupo:</b> origen (celda y nodo), peso (personas), demora (alerta + preparación Gamma) y estado.',
-            '<b>Heterogeneidad:</b> cada grupo tiene su propia demora de salida; el fuego es distinto en cada réplica.',
-            '<b>Monte Carlo pareado:</b> la réplica <i>r</i> usa el fuego <i>r</i> (semilla 1000+r) y preparación 2000+r en los 4 escenarios.',
-            '<b>Resultados:</b> media ± IC 95 % (t de Student) sobre 30 réplicas.'])
     _sel = lazy_tabs(['👥 A · Agentes: origen, peso, demora y estado', '🎲 B · Corridas múltiples (Monte Carlo)',
                                    '🔥 C · Variabilidad del fuego entre réplicas'], 'agent', '#8e44ad')
     cfg = json.loads((D.ROOT / 'config/escenarios_evacuacion.json').read_text())

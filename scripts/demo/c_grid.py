@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from scripts.demo import datos as D
-from scripts.demo.ui import XC, YC, banner, view_for
+from scripts.demo.ui import XC, YC, view_for
 from scripts.demo.ui_extra import lazy_tabs, fire_model, plain_layout, roads_trace, town_center_cell
 
 
@@ -18,17 +18,6 @@ def _discrete_scale(keys, colors):
 
 
 def render(S):
-    banner('grid', '1', 'Grillas, autómatas celulares y SIG',
-           'El territorio se discretiza en una <b>grilla regular de celdas de 100 m</b>; cada celda guarda atributos '
-           '(capas ráster) y el fuego se propaga celda a celda con una regla local sobre la <b>vecindad de Moore</b> '
-           '(las 8 celdas que rodean a una celda). Las carreteras entran como capa <b>vectorial</b> (líneas) y se '
-           'cruzan espacialmente con la grilla.',
-           '<code>scripts/fuego/f1…f2</code> (capas ráster), <code>scripts/fuego/modelo_fuego.py</code> (autómata), '
-           '<code>scripts/evacuacion/red_vial.py</code> (capa vectorial)',
-           ['<b>SIG:</b> combustible (LANDFIRE), elevación y pendiente (USGS 3DEP), población (WorldPop) = ráster; '
-            'perímetro final (CAL FIRE) y carreteras (TIGER) = vectorial; todo en <b>EPSG:32610 (UTM 10N)</b>.',
-            '<b>Autómata:</b> 4 estados (no combustible, susceptible, ardiendo, consumida) con paso de 1 min.',
-            '<b>Regla:</b> p = p<sub>h</sub>·(1+p<sub>veg</sub>)·p<sub>w</sub>·p<sub>s</sub> (combustible, viento, pendiente).'])
     _sel = lazy_tabs(['🗺️ A · Capas SIG: ráster + vectorial', '🔲 B · Vecindad de Moore (la regla)',
                                     '🔥 C · Autómata celular en vivo'], 'grid', '#2e9e5b')
     g = S['grid']

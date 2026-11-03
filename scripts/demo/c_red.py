@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from scripts.demo import datos as D
-from scripts.demo.ui import banner, fire_trace, view_for
+from scripts.demo.ui import fire_trace, view_for
 from scripts.demo.ui_extra import lazy_tabs, net_extra, plain_layout, seg_xy
 
 EXIT_COLORS = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#00b3b3']
@@ -28,17 +28,6 @@ def tree_for(S, blocked, exits_ok):
 
 def render(S):
     X = net_extra()
-    banner('net', '2', 'Redes: grafo vial dirigido, conectividad, destinos y selección de rutas',
-           'La red vial es un <b>grafo dirigido G = (V, E)</b>: los <b>nodos</b> son intersecciones y las <b>aristas</b> son '
-           'tramos con sentido, longitud, tiempo de viaje y capacidad. Sobre el grafo se estudia la '
-           '<b>conectividad</b> (componentes), los <b>destinos</b> (salidas del dominio) y la <b>selección de rutas</b> '
-           'de costo mínimo (Dijkstra), que cambia cuando el fuego cierra tramos.',
-           '<code>scripts/evacuacion/red_vial.py</code> (construcción del grafo desde TIGER) y '
-           '<code>scripts/evacuacion/motor.py</code> función <code>route()</code> (Dijkstra con cierres)',
-           ['<b>Grafo dirigido:</b> cada calle genera dos aristas opuestas; el peso es el tiempo de viaje (min).',
-            '<b>Conectividad:</b> componentes conexas; los nodos sin camino a una salida no pueden evacuar.',
-            '<b>Destinos:</b> 6 salidas absorbentes (Skyway, Clark, Pentz, Neal…), cada una con capacidad finita.',
-            '<b>Rutas:</b> cada grupo toma el camino de menor tiempo hacia la salida alcanzable más cercana.'])
     _sel = lazy_tabs(['🕸️ A · Estructura del grafo dirigido', '🧩 B · Conectividad y destinos',
                                     '🧭 C · Selección de rutas (Dijkstra)'], 'net', '#1f6feb')
     N, E = len(S['xy']), len(S['u'])

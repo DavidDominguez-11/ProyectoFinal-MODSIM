@@ -2,7 +2,7 @@
 
     .venv/Scripts/streamlit run scripts/demo/app.py
 
-Enlaces directos: ?p=<sección 0-3>&sub=<subvista 0-3>
+Enlaces directos: ?p=<sección 0-2>&sub=<subvista 0-2>
 """
 import sys
 from pathlib import Path
@@ -14,12 +14,11 @@ from scripts.demo import datos as D  # noqa: E402
 
 st.set_page_config(page_title='Camp Fire: fuego y evacuación', page_icon='🔥', layout='wide')
 
-from scripts.demo import c_agentes, c_des, c_grid, c_red  # noqa: E402
+from scripts.demo import c_agentes, c_grid, c_red  # noqa: E402
 from scripts.demo.ui import static  # noqa: E402
 
-NAV = ['🟩 1 · Grillas, autómatas y SIG', '🟦 2 · Redes: grafo vial dirigido',
-       '🟧 3 · DES: entidades, recursos y colas', '🟪 4 · Agentes y corridas múltiples']
-KEYS = ['grid', 'net', 'des', 'agent']
+NAV = ['🟩 1 · Grillas, autómatas y SIG', '🟦 2 · Redes: grafo vial dirigido', '🟪 3 · Agentes y corridas múltiples']
+KEYS = ['grid', 'net', 'agent']
 
 S = static()
 runs = D.available_runs()
@@ -38,7 +37,5 @@ if page == NAV[0]:
     c_grid.render(S)
 elif page == NAV[1]:
     c_red.render(S)
-elif page == NAV[2]:
-    c_des.render(S, runs)
 else:
     c_agentes.render(S, runs)

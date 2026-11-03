@@ -9,23 +9,6 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.demo import datos as D  # noqa: E402
 
-# Un color por concepto de la materia, usado en banners, gráficos y barra lateral.
-COLORS = {'grid': '#2e9e5b', 'net': '#1f6feb', 'des': '#f08a00', 'agent': '#8e44ad'}
-
-
-def banner(kind, number, title, concept, where, bullets=()):
-    """Cabecera coloreada que deja explícito qué concepto de la materia se está viendo."""
-    c = COLORS[kind]
-    items = ''.join(f'<li>{b}</li>' for b in bullets)
-    st.markdown(
-        f"""<div style="border-left:10px solid {c};background:{c}22;padding:14px 18px;border-radius:6px;margin-bottom:14px">
-<div style="font-size:.85rem;letter-spacing:.08em;color:{c};font-weight:700">CONCEPTO {number}</div>
-<div style="font-size:1.7rem;font-weight:700;margin:2px 0 6px 0">{title}</div>
-<div style="font-size:1rem"><b>Qué es:</b> {concept}</div>
-<div style="font-size:.9rem;opacity:.85;margin-top:4px"><b>Dónde está en el proyecto:</b> {where}</div>
-<ul style="margin:8px 0 0 0;padding-left:20px;font-size:.95rem">{items}</ul></div>""", unsafe_allow_html=True)
-
-
 XC = D.X0 + (np.arange(D.SHAPE[1]) + .5) * D.RES
 YC = D.Y0 - (np.arange(D.SHAPE[0]) + .5) * D.RES
 EXTENT = (D.X0, D.X0 + D.SHAPE[1] * D.RES, D.Y0 - D.SHAPE[0] * D.RES, D.Y0)
